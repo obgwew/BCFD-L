@@ -7,8 +7,8 @@ from kivy.uix.popup import Popup
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.metrics import dp
-from config import AppConfig
-from translations import Translations
+from main_exe.config import AppConfig
+from main_exe.translations import Translations
 
 class CustomButton(Button):
     """زر مخصص مع تصميم محسن"""

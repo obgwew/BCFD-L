@@ -1,4 +1,4 @@
-**Title :** Bot Create For Discord - Local (BCFD-L)
+**Title :** Bot Cerate For Discord - Local (BCFD-L)
 
 **Beta release:** '1.0.0.00'
 1 = Interface
@@ -20,3 +20,16 @@
 - You may encounter problems if the script is very large or complex, due to the complexity of the work.
 
 **Developers:** @y.lw & .o_bg
+
+**Latest Updates:**
+
+- 1.0.0.00 = Beta version, everything is new so far
+ - New interface
+ - New language
+ - New control mechanism
+
+- 1.0.0.04 = Repair update
+ - Fixed the Arabic language issue
+ - Fixed translator errors
+ - Fixed the program crashing issue
+ - Fixed the server issue

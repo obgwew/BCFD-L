@@ -1,23 +1,17 @@
-# local_server.py
-
 import discord
 from discord.ext import commands
 import json
 import os
 import asyncio
 import threading
-from pathlib import Path
-
-from main_exe.FDScript import run_script  # استدعاء المفسر من الملف الخارجي
+import logging
+from main_exe.FDScript import run_script
 
 class PrefixManager:
-    """مدير البرفكسات المخصصة"""
     def __init__(self):
         self.prefixes_file = "app_data/prefixes.json"
         self.files_dir = "app_data/files"
         self.prefixes = self.load_prefixes()
-        self.file_commands = {}
-        self.load_file_commands()
 
     def load_prefixes(self):
         if os.path.exists(self.prefixes_file):
@@ -28,113 +22,111 @@ class PrefixManager:
                 pass
         return {}
 
-    def load_file_commands(self):
-        self.file_commands = {}
+    def get_file_by_message(self, content):
+        self.prefixes = self.load_prefixes()
+        content = content.strip()
         for filename, prefix in self.prefixes.items():
-            if prefix.strip():
-                self.file_commands[prefix.strip()] = filename
+            if content.startswith(prefix):
+                return filename
+        return None
 
-    def get_file_by_prefix(self, prefix):
-        return self.file_commands.get(prefix)
-
-    def get_all_prefixes(self):
-        return list(self.file_commands.keys())
-
-# إنشاء مدير البرفكسات
 prefix_manager = PrefixManager()
 
-# دالة لتحديد البرفكس ديناميكياً
 async def get_prefix(bot, message):
-    prefix_manager.load_prefixes()
-    prefix_manager.load_file_commands()
-    prefixes = prefix_manager.get_all_prefixes()
-    prefixes.append('!')
-    return prefixes
+    return "!"
 
-# إنشاء البوت مع البرفكس الديناميكي
 c = commands.Bot(command_prefix=get_prefix, intents=discord.Intents.all(), help_command=None)
 
 @c.event
 async def on_ready():
-    print(f'{c.user} متصل!')
+    print(f'{c.user} متصل وجاهز!')
 
 @c.event
 async def on_message(message):
     if message.author.bot:
         return
-
-    prefix_manager.load_prefixes()
-    prefix_manager.load_file_commands()
-
-    message_content = message.content
-    matched_prefix = None
-    matched_file = None
-
-    for prefix in prefix_manager.get_all_prefixes():
-        if message_content.startswith(prefix + ' ') or message_content == prefix:
-            matched_prefix = prefix
-            matched_file = prefix_manager.get_file_by_prefix(prefix)
-            break
-
-    if matched_prefix and matched_file:
-        try:
-            file_path = os.path.join(prefix_manager.files_dir, matched_file)
-            if os.path.exists(file_path):
+    matched_file = prefix_manager.get_file_by_message(message.content)
+    if matched_file:
+        file_path = os.path.join(prefix_manager.files_dir, matched_file)
+        if os.path.exists(file_path):
+            try:
                 with open(file_path, 'r', encoding='utf-8') as f:
-                    file_content = f.read()
-                await run_script(message, c, file_content)  # تفسير الأوامر من bcfd
-            else:
-                await message.channel.send(f"الملف {matched_file} غير موجود!")
-        except Exception as e:
-            await message.channel.send(f"خطأ في تنفيذ الملف: {str(e)}")
-
+                    script_text = f.read()
+                await run_script(message, c, script_text)
+                return
+            except Exception as e:
+                print(f"Error executing {matched_file}: {e}")
     await c.process_commands(message)
 
-# 🔹 دعم التشغيل والإيقاف الآمن للبوت (مناسب لـ Kivy)
-bot_loop   = None
-bot_thread = None
 
-def start_bot():
-    """
-    تشغيل البوت في خيط منفصل مع event loop جديد.
-    إذا كان البوت يعمل بالفعل، يتجاهل الطلب.
-    """
-    global bot_loop, bot_thread
+_client: discord.Client | None = None
+_loop:   asyncio.AbstractEventLoop | None = None
+_thread: threading.Thread | None = None
+_lock    = threading.Lock()
+_stopping = False
 
-    if bot_thread and bot_thread.is_alive():
-        return
+def _get_token() -> str:
+    try:
+        with open("bot_token.txt", "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return ""
 
-    def _run():
-        global bot_loop
-        bot_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(bot_loop)
-
+def _runner(token: str) -> None:
+    global _loop, _stopping
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    with _lock:
+        _loop = loop
+    try:
+        loop.run_until_complete(_client.start(token))
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        print(f"Bot error: {e}")
+    finally:
         try:
-            with open("bot_token.txt", "r", encoding="utf-8") as f:
-                token = f.read().strip()
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.run_until_complete(loop.shutdown_default_executor())
+        except Exception:
+            pass
+        loop.close()
+        with _lock:
+            _stopping = False
 
-            bot_loop.run_until_complete(c.start(token))
+def start_bot() -> bool:
+    global _client, _thread, _stopping
+    if _stopping:
+        return False
+    if _client and not _client.is_closed():
+        return False
+    token = _get_token()
+    if not token:
+        return False
+    _client = c
+    _thread = threading.Thread(target=_runner, args=(token,), daemon=True)
+    _thread.start()
+    return True
 
+def stop_bot() -> None:
+    global _stopping
+    if _stopping:
+        return
+    if _client is None or _client.is_closed():
+        return
+    _stopping = True
+    if _loop and _loop.is_running():
+        future = asyncio.run_coroutine_threadsafe(_client.close(), _loop)
+        try:
+            future.result(timeout=5)
         except Exception as e:
-            print(f"❌ خطأ أثناء تشغيل البوت: {e}")
+            print(f"Error closing bot: {e}")
 
-        finally:
-            bot_loop.run_until_complete(bot_loop.shutdown_asyncgens())
-            bot_loop.close()
+def restart_bot() -> bool:
+    stop_bot()
+    if _thread and _thread.is_alive():
+        _thread.join(timeout=6)
+    return start_bot()
 
-    bot_thread = threading.Thread(target=_run, daemon=True)
-    bot_thread.start()
-
-def stop_bot():
-    global bot_loop, bot_thread
-
-    if bot_loop:
-        async def _close_bot():
-            await c.close()
-
-        bot_loop.call_soon_threadsafe(lambda: asyncio.create_task(_close_bot()))
-
-    if bot_thread:
-        bot_thread.join()
-        bot_thread = None
-        bot_loop   = None
+def is_running() -> bool:
+    return bool(_client and not _client.is_closed())
