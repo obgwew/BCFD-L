@@ -46,14 +46,14 @@ Your score is 10
 
 ### setVar / getVar
 
-Stores and retrieves persistent variables saved to `data` on exe. These values survive across script executions.
+Stores and retrieves persistent variables saved to disk. These values survive across script executions.
 
 ```
 $setVar[name; value]
 $getVar[name]
 ```
 
-`$getVar` is used inline inside arguments, not as a standalone command.
+`$getVar[name]` is used inline inside arguments, not as a standalone command.
 
 Example:
 ```
@@ -105,21 +105,47 @@ Output: A Discord embed card with the title "Welcome", the given description, an
 
 ---
 
+### strictArgs
+
+Checks that the user provided an argument after the command trigger. If the message has no text beyond the command name, the error message is sent and execution continues.
+
+```
+$strictArgs[; error text]
+```
+
+Example:
+```
+$strictArgs[; Please provide a username.]
+$sendMessage[Looking up: $message]
+```
+
+When the user sends the command with no argument:
+```
+Please provide a username.
+```
+
+When the user sends the command followed by a name:
+```
+Looking up: user
+```
+
+---
+
 ## Built-in Variables
 
 Read-only references resolved at runtime. Use them inline anywhere with `$name`.
 
-| Variable     | Value                                          |
-|--------------|------------------------------------------------|
-| $authorID    | Numeric ID of the message author               |
-| $authorName  | Username of the message author                 |
-| $mention     | Mention string of the message author           |
-| $channelID   | Numeric ID of the current channel              |
-| $channelName | Name of the current channel                    |
-| $guildName   | Name of the current server                     |
-| $message     | Full content of the triggering message         |
-| $botName     | Username of the bot                            |
-| $botID       | Numeric ID of the bot                          |
+| Variable      | Value                                      |
+|---------------|--------------------------------------------|
+| `$authorID`   | Numeric ID of the message author           |
+| `$authorName` | Username of the message author             |
+| `$mention`    | Mention string of the message author       |
+| `$channelID`  | Numeric ID of the current channel          |
+| `$channelName`| Name of the current channel                |
+| `$guildName`  | Name of the current server                 |
+| `$message`    | Text after the command trigger             |
+| `$botName`    | Username of the bot                        |
+| `$botID`      | Numeric ID of the bot                      |
 
 Example:
 ```
@@ -135,13 +161,14 @@ Hello user, your ID is 123456789012345678
 
 ## Math Commands
 
-Each command takes exactly two numeric arguments and sends the result to the channel. All four can also be used inline inside other arguments.
+Each command takes exactly two numeric arguments. All five can be used as standalone commands (result is sent to the channel) or inline inside other arguments.
 
 ```
 $sum[a; b]
 $sub[a; b]
 $mul[a; b]
 $div[a; b]
+$mod[a; b]
 ```
 
 Division by zero produces an error message instead of crashing.
@@ -154,6 +181,7 @@ $sum[$var[x]; $var[y]]
 $sub[$var[x]; $var[y]]
 $mul[$var[x]; $var[y]]
 $div[$var[x]; $var[y]]
+$mod[$var[x]; $var[y]]
 ```
 
 Output:
@@ -161,7 +189,8 @@ Output:
 11
 5
 24
-2.666
+2.6666666666666665
+2
 ```
 
 Inline usage:
@@ -177,7 +206,64 @@ Result is 10
 
 ---
 
-## if / elif / else / endif
+## Random Commands
+
+### randomint
+
+Returns a random integer between `min` and `max` (inclusive). Can be used as a standalone command or inline.
+
+```
+$randomint[min; max]
+```
+
+Example:
+```
+$sendMessage[Your lucky number: $randomint[1; 100]]
+```
+
+Output:
+```
+Your lucky number: 42
+```
+
+---
+
+### randomstr
+
+Picks one item at random from a list of strings separated by `;`.
+
+```
+$randomstr[option1; option2; option3; ...]
+```
+
+Example:
+```
+$randomstr[rock; paper; scissors]
+```
+
+Output (one of):
+```
+paper
+```
+
+---
+
+### randomUserID
+
+Picks a random non-bot member from the current server and sends their numeric ID. Only works inside a server (not in DMs).
+
+```
+$randomUserID
+```
+
+Example:
+```
+$sendMessage[Random member ID: $randomUserID]
+```
+
+---
+
+## Conditions: if / elif / else / endif
 
 Evaluates a condition and executes the matching branch. Supported operators: `==` `!=` `>` `<` `>=` `<=`. Numeric strings are compared numerically; non-numeric strings fall back to lexicographic comparison.
 
@@ -206,6 +292,33 @@ $endif
 Output:
 ```
 Grade: B
+```
+
+### Compound Conditions: $and / $or
+
+Multiple conditions can be combined inside `$if` or `$elif` using `$and` or `$or`. These are not standalone commands.
+
+```
+$if[$and[condition1; condition2; ...]]
+$if[$or[condition1; condition2; ...]]
+```
+
+`$and` requires **all** conditions to be true. `$or` requires **at least one** to be true.
+
+Example:
+```
+$var[age; 20]
+$var[score; 85]
+$if[$and[$var[age] >= 18; $var[score] >= 80]]
+$sendMessage[Eligible!]
+$else
+$sendMessage[Not eligible.]
+$endif
+```
+
+Output:
+```
+Eligible!
 ```
 
 ---
@@ -268,8 +381,10 @@ Hello!
 
 Exits the nearest enclosing `$while` or `$for` loop immediately.
 
+> ⚠️ `$break` is experimental and may behave unexpectedly in some cases.
+
 ```
-$break (It's still experimental and has problems.)
+$break
 ```
 
 Example:
@@ -287,32 +402,6 @@ $sendMessage[Stopped at $var[n]]
 Output:
 ```
 Stopped at 4
-```
-
----
-
-## strictArgs
-
-Checks that the user provided an argument after the command trigger. If the message has no text beyond the command name, the error message is sent and execution continues past it.
-
-```
-$strictArgs[$message==; error text]
-```
-
-Example:
-```
-$strictArgs[$message==; Please provide a username.]
-$sendMessage[Looking up: $message]
-```
-
-When the user sends the command with no argument:
-```
-Please provide a username.
-```
-
-When the user sends the command followed by a name:
-```
-Looking up: user
 ```
 
 ---
@@ -337,15 +426,17 @@ Your channel is #general.
 
 ## Error Handling
 
-FDScript validates all commands before execution begins. If any error is found, execution stops and the error is reported to the channel. No partial execution occurs.
+FDScript validates all commands before execution begins. If any error is found, execution stops entirely and all errors are reported to the channel. No partial execution occurs.
 
-| Error                  | Cause                                                       |
-|------------------------|-------------------------------------------------------------|
-| Unknown command        | A `$name` that is not in the recognized command list        |
-| Syntax error           | An unclosed `[` bracket                                     |
-| Wrong argument count   | Passing the wrong number of arguments to a command          |
-| Non-numeric argument   | Passing a string where a number is expected                 |
-| Division by zero       | Second argument to `$div` resolves to `0`                   |
+| Error                | Cause                                                    |
+|----------------------|----------------------------------------------------------|
+| Unknown command      | A `$name` not in the recognized command list             |
+| Syntax error         | An unclosed `[` bracket                                  |
+| Wrong argument count | Passing the wrong number of arguments to a command       |
+| Non-numeric argument | Passing a string where a number is expected              |
+| Division by zero     | Second argument to `$div` resolves to `0`               |
+| Unmatched block      | `$endif` / `$endwhile` / `$endfor` without an opener    |
+| `$break` outside loop| Using `$break` outside a `$while` or `$for`             |
 
 Example:
 ```
@@ -375,10 +466,12 @@ Output on the third call:
 user, you have used this command 3 times.
 ```
 
+---
+
 ### Simple guessing game
 
 ```
-$strictArgs[$message; Please provide a number.]
+$strictArgs[; Please provide a number.]
 $var[guess; $message]
 $var[answer; 7]
 $if[$var[guess] == $var[answer]]
@@ -388,13 +481,23 @@ $sendMessage[Wrong, try again.]
 $endif
 ```
 
+---
+
+### Random role picker
+
+```
+$randomstr[Warrior; Mage; Rogue; Healer]
+```
+
+---
+
 ### Embed announcement
 
 ```
-$embed[title; Description; hex-color]
+$embed[Server Update; Maintenance starts at 10 PM.; e67e22]
 ```
 
-Output: A Discord embed with an orange color and the given title and description.
+Output: A Discord embed with an orange sidebar, the given title and description.
 
 ---
 
@@ -405,4 +508,4 @@ When `$var[name]` is encountered, the interpreter resolves it in this order:
 1. Temporary in-memory variables set with `$var[name; value]`
 2. Built-in read-only variables such as `$authorID` and `$channelName`
 
-Persistent variables set with `$setVar` are accessed only via `$getVar[name]` and are not part of the above lookup chain.
+Persistent variables set with `$setVar` are accessed **only** via `$getVar[name]` and are not part of the above lookup chain.

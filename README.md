@@ -1,35 +1,43 @@
-**Title :** Bot Cerate For Discord - Local (BCFD-L)
+# Bot Creator For Discord - Local (BCFD-L)
 
-**Beta release:** '1.0.0.00'
-1 = Interface
-0 = Translator FD
-0 = Features
-00 = Error's
+> Build and run Discord bots locally using **FDScript** — a lightweight scripting language designed specifically for this tool.
 
+---
 
-**Desc:**  A project to create a Discord bot on a dedicated server using __FDScript__ or "Free Design Script".
+**Description:** A desktop application for creating and running Discord bots locally, using **FDScript** – a scripting language specifically designed for bot scripting – to run your bots as efficiently as possible.
 
-**Project Goal:** To create Discord bots easily and without restrictions, and to create a bot in less than 30 seconds effortlessly.
+**Goal:** To simplify the process. No hosting required (it runs on-device), no need to write structurally complex code, and no need to deal with any learning or programming limitations – just write a script and get a responsive bot in 30 seconds.
 
-**Notes:** You may encounter these issues after some time...
+---
 
-- You must restart the bot to receive new commands (because it generally relies on your personal server).
+**Notes:**
 
-- The currently available commands are limited to a very small number, but due to the nature of FDScript, you can use tools available in any natural language, from conditional statements to loops and variable definitions.
+- Some features require a restart to take effect.
+- The built-in command set is intentionally minimal — FDScript itself handles the heavy lifting.
+- Very large or deeply nested scripts may produce unexpected behavior.
 
-- You may encounter problems if the script is very large or complex, due to the complexity of the work.
+---
 
-**Developers:** @y.lw & .o_bg
+**Changelog:**
 
-**Latest Updates:**
+- **1.0.0.00** — Initial beta release
+  - New interface
+  - New language (FDScript)
+  - New control mechanism
 
-- 1.0.0.00 = Beta version, everything is new so far
- - New interface
- - New language
- - New control mechanism
+- **1.0.0.04** — Patch
+  - Fixed Arabic language rendering
+  - Fixed translator errors
+  - Fixed crash on startup
+  - Fixed server connection issue
 
-- 1.0.0.04 = Repair update
- - Fixed the Arabic language issue
- - Fixed translator errors
- - Fixed the program crashing issue
- - Fixed the server issue
+- **2.5.2.01** — Feature update
+  - Improved UI
+  - Added 5 new commands
+  - Fixed bot file conflicts
+  - Added settings panel
+  - Added theme support
+
+---
+
+**Developers:** @y.lw (contributor) · @o_bg (programming)

@@ -1,0 +1,9 @@
+welcome to update 2.5.2.01
+
+- add a new ui
+
+- add a new command's
+
+- fixed bot_files
+
+- add a new Themes
