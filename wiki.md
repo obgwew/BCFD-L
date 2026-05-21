@@ -1,6 +1,7 @@
 # FDScript
 
 FDScript is a lightweight scripting language for Discord bots. Scripts are executed line by line; each command begins with `$` and takes arguments inside `[]` separated by `;`. Lines without a `$` prefix are sent as plain text to the channel.
+(There is currently no ability to generate instructions within the software) 
 
 ---
 
@@ -12,6 +13,7 @@ FDScript is a lightweight scripting language for Discord bots. Scripts are execu
 - Lines starting with `#` or `//` are comments and are skipped
 - A line with no `$` prefix is sent verbatim to the Discord channel
 - An unclosed bracket causes a syntax error
+- No Comment (currently)
 
 ---
 
@@ -189,7 +191,7 @@ Output:
 11
 5
 24
-2.6666666666666665
+2.66
 2
 ```
 
@@ -379,9 +381,7 @@ Hello!
 
 ## break
 
-Exits the nearest enclosing `$while` or `$for` loop immediately.
-
-> ⚠️ `$break` is experimental and may behave unexpectedly in some cases.
+Exits the nearest enclosing `$while` or `$for` loop immediately.
 
 ```
 $break
