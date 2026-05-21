@@ -20,18 +20,18 @@
 
 **Changelog:**
 
-- **1.0.0.00** — Initial beta release
+- **1.0.0** — Initial beta release
   - New interface
   - New language (FDScript)
   - New control mechanism
 
-- **1.0.0.04** — Patch
+- **1.0.1** — Patch
   - Fixed Arabic language rendering
   - Fixed translator errors
   - Fixed crash on startup
   - Fixed server connection issue
 
-- **2.5.2.01** — Feature update
+- **2.0.0** — Feature update & reconstruction Structure
   - Improved UI
   - Added 5 new commands
   - Fixed bot file conflicts
