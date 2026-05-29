@@ -27,7 +27,6 @@ _SETTINGS_PATH = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'app_data/settings.json')
 )
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  قراءة / كتابة الاعدادات
 # ══════════════════════════════════════════════════════════════════════════════
@@ -97,8 +96,8 @@ ALL_THEMES = {
             'input_bg':       "#4E4E4E",
             'input_border':   "#5A5A5A",
             'text':           '#000000',
-            'text_dim':       "#D8D8D8",
-            'text_on_accent': '#FFFFFF',
+            'text_dim':       "#5C5C5C",
+            'text_on_accent': "#838383",
             'accent':         '#1B1F2E',
             'accent_hover':   '#2C3150',
             'success':        '#16A34A',
@@ -189,15 +188,15 @@ ALL_THEMES = {
         'data': {
             'bg':             "#FFFFFF",
             'card_bg':        "#3700FF",
-            'card_border':    "#DD0000",
+            'card_border':    "#00027C",
             'footer_bg':      "#EEFF00",
             'popup_bg':       "#B90000",
             'input_bg':       "#C90000",
             'input_border':   "#FBFF00",
             'text':           '#E0F0FF',
             'text_dim':       '#8AAFCF',
-            'text_on_accent': "#EC0000",
-            'accent':         "#EEFF00",
+            'text_on_accent': "#B30000",
+            'accent':         "#1EB300",
             'accent_hover':   "#0068B8",
             'success':        '#4CAF50',
             'danger':         '#F44336',
@@ -205,7 +204,7 @@ ALL_THEMES = {
             'discord':        "#7972DA",
             'github':         "#001529",
             'title_bcfd':     "#00C410",
-            'nav_bg':         "#00039B",
+            'nav_bg':         "#00027A",
             'nav_active':     '#FFFFFF',
             'nav_inactive':   '#90CAF9',
             'divider':        "#ACAF00",
@@ -420,7 +419,7 @@ class BotSettingsTab(BoxLayout):
         save_btn = Button(
             text=_t('save'),
             size_hint=(1, None), height=dp(42),
-            background_normal='', background_color=(0.1, 0.12, 0.18, 1),
+            background_normal='', background_color=ThemeEngine.color('accent'),
             color=(1, 1, 1, 1), font_size=dp(14), bold=True,
             font_name=_font(),
         )
@@ -521,7 +520,7 @@ class BotSettingsTab(BoxLayout):
             hint_text=_t(hint_key) if hint_key else '',
             hint_text_color=(0.5, 0.5, 0.5, 0.6),
             foreground_color=(0.1, 0.1, 0.1, 1),
-            background_color=(0.96, 0.96, 0.97, 1),
+            background_color=ThemeEngine.color('bg'),
             cursor_color=(0.1, 0.1, 0.18, 1),
             font_size=dp(13), font_name=_font(),
             multiline=False, password=password,
@@ -541,8 +540,8 @@ class BotSettingsTab(BoxLayout):
             text=text,
             size_hint=(None, None), size=(dp(44), dp(32)),
             font_size=dp(12), bold=True, font_name=_font(),
-            background_normal='', background_color=(0.85, 0.85, 0.85, 1),
-            color=(0.2, 0.2, 0.2, 1),
+            background_normal='', background_color=ThemeEngine.color('card_bg'),
+            color=ThemeEngine.color('text'),
         )
         btn.bind(on_press=lambda x, lc=lang_code: self._set_lang(lc))
         return btn
@@ -561,9 +560,8 @@ class BotSettingsTab(BoxLayout):
             spacing=dp(12),
             padding=[dp(6), dp(6), dp(6), dp(6)],
         )
-
         swatch = Widget(size_hint=(None, None), size=(dp(34), dp(34)))
-
+        
         def _draw(inst, *_):
             inst.canvas.clear()
             with inst.canvas:
@@ -612,7 +610,7 @@ class BotSettingsTab(BoxLayout):
             text='>',
             size_hint=(None, None), size=(dp(36), dp(36)),
             background_normal='', font_name=_font(),
-            background_color=(0.1, 0.12, 0.18, 1) if is_sel else (0.86, 0.86, 0.86, 1),
+            background_color=ThemeEngine.color('accent'),
             color=(1, 1, 1, 1) if is_sel else (0.55, 0.55, 0.55, 1),
             font_size=dp(15), bold=True,
         )
@@ -631,7 +629,7 @@ class BotSettingsTab(BoxLayout):
         btn = Button(
             text=_t(label_key),
             size_hint=(None, None), size=(dp(90), dp(36)),
-            background_normal='', background_color=(0.1, 0.12, 0.18, 1),
+            background_normal='', background_color=ThemeEngine.color('accent'),
             color=(1, 1, 1, 1), font_size=dp(13), bold=True,
             font_name=_font(),
         )
@@ -649,7 +647,12 @@ class BotSettingsTab(BoxLayout):
         row.add_widget(btn)
         row.add_widget(link_lbl)
         return row
-
+    
+    def _on_theme_update(self, data: dict):
+        c = lambda k: get_color_from_hex(data.get(k, '#888888'))
+        self._save_btn_ref.background_color = c('accent')
+        self._refresh_lang_btns()
+        
     # ══════════════════════════════════════════════════════════════════════════
     #  اللغة
     # ══════════════════════════════════════════════════════════════════════════
@@ -662,11 +665,11 @@ class BotSettingsTab(BoxLayout):
     def _refresh_lang_btns(self):
         for btn, code in [(self._btn_en, 'en'), (self._btn_ar, 'ar')]:
             if code == self._lang:
-                btn.background_color = (0.1, 0.12, 0.18, 1)
-                btn.color            = (1, 1, 1, 1)
+                btn.background_color = ThemeEngine.color('accent')
+                btn.color            = ThemeEngine.color('text_on_accent')
             else:
-                btn.background_color = (0.88, 0.88, 0.88, 1)
-                btn.color            = (0.3, 0.3, 0.3, 1)
+                btn.background_color = ThemeEngine.color('card_bg')
+                btn.color            = ThemeEngine.color('text_on_accent')
 
     # ══════════════════════════════════════════════════════════════════════════
     #  اختيار الثيم
@@ -683,10 +686,10 @@ class BotSettingsTab(BoxLayout):
         for key, btn in self._theme_btns.items():
             if key == theme_key:
                 btn.background_color = ThemeEngine.color('accent')
-                btn.color            = (1, 1, 1, 1)
+                btn.color            = ThemeEngine.color('text_on_accent')
             else:
-                btn.background_color = (0.86, 0.86, 0.86, 1)
-                btn.color            = (0.55, 0.55, 0.55, 1)
+                btn.background_color = ThemeEngine.color('card_bg')
+                btn.color            = ThemeEngine.color('text_on_accent')
 
         if self._on_theme_change:
             self._on_theme_change(theme_key)
@@ -714,7 +717,7 @@ class BotSettingsTab(BoxLayout):
 
         bot_dir = self._bot_data.get('bot_dir', '')
         if bot_dir:
-            config_path = os.path.join(bot_dir, 'config.json')
+            config_path = os.path.join(bot_dir, 'bot_files', 'config.json')
             try:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     cfg = json.load(f)
@@ -737,3 +740,4 @@ class BotSettingsTab(BoxLayout):
         self._bot_data       = bot_data
         self._name_inp.text  = bot_data.get('name',  '')
         self._token_inp.text = bot_data.get('token', '')
+        #background_color 

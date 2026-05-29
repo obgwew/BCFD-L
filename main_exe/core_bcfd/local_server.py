@@ -1,4 +1,5 @@
-# bot_runner.py — النسخة المعدلة
+# -*- coding: utf-8 -*-
+# main_exe/core_bcfd/local_server.py 
 
 import discord
 from discord.ext import commands
@@ -6,7 +7,8 @@ import json
 import os
 import asyncio
 import threading
-from main_exe.core_bcfd.FDScript import run_script, set_vars_dir
+import time
+from main_exe.core_bcfd.FDScript import run_script, set_vars_dir, set_bot_start_time
 
 
 # ══════════════════════════════════════════════════════════════
@@ -15,21 +17,17 @@ from main_exe.core_bcfd.FDScript import run_script, set_vars_dir
 
 class PrefixManager:
     def __init__(self):
-        self._bot_commands_dir = ''   # يُضبط عند start_bot
+        self._bot_commands_dir = ''
 
     def set_bot_dir(self, bot_dir: str):
-        """
-        bot_dir = app_data/{bot_name}/bot_files
-        bot_commands = app_data/{bot_name}/bot_commands
-        """
-        bot_root = os.path.dirname(os.path.abspath(bot_dir))
+        abs_dir = os.path.abspath(bot_dir)
+        if os.path.basename(abs_dir).lower() == 'bot_files':
+            bot_root = os.path.dirname(abs_dir)
+        else:
+            bot_root = abs_dir
         self._bot_commands_dir = os.path.join(bot_root, 'bot_commands')
 
-    def _load_commands(self) -> list[dict]:
-        """
-        يقرأ جميع ملفات .py في bot_commands/
-        كل ملف يبدأ بـ:  #PREFIX:<prefix_value>
-        """
+    def _load_commands(self) -> list[dict]:  
         if not os.path.isdir(self._bot_commands_dir):
             return []
 
@@ -86,6 +84,7 @@ def _make_bot() -> commands.Bot:
 
     @bot.event
     async def on_ready():
+        set_bot_start_time(time.time())
         print(f'[Bot] {bot.user} متصل وجاهز!')
 
     @bot.event
@@ -109,7 +108,7 @@ def _make_bot() -> commands.Bot:
 
 def _get_token(bot_dir: str) -> str:
     try:
-        config_path = os.path.join(bot_dir, 'config.json')
+        config_path = os.path.join(bot_dir, "bot_files",'config.json')
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
         return config.get('token', '')
@@ -166,7 +165,7 @@ def start_bot(bot_dir: str) -> bool:
     _client = _make_bot()
     _thread = threading.Thread(target=_runner, args=(token,), daemon=True)
     _thread.start()
-    print("[Bot] ▶ تم التشغيل")
+    print("[Bot] تم التشغيل")
     return True
 
 
@@ -183,7 +182,7 @@ def stop_bot() -> None:
             future.result(timeout=5)
         except Exception as e:
             print(f"[Bot] خطأ في الإيقاف: {e}")
-    print("[Bot] ■ تم الإيقاف")
+    print("[Bot] تم الإيقاف")
 
 
 def restart_bot(bot_dir: str) -> bool:
@@ -195,3 +194,4 @@ def restart_bot(bot_dir: str) -> bool:
 
 def is_running() -> bool:
     return bool(_client and not _client.is_closed())
+#set_bot_dir

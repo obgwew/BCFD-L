@@ -1,7 +1,6 @@
 # FDScript
 
 FDScript is a lightweight scripting language for Discord bots. Scripts are executed line by line; each command begins with `$` and takes arguments inside `[]` separated by `;`. Lines without a `$` prefix are sent as plain text to the channel.
-(There is currently no ability to generate instructions within the software) 
 
 ---
 
@@ -10,10 +9,11 @@ FDScript is a lightweight scripting language for Discord bots. Scripts are execu
 - Every command starts with `$`
 - Arguments go inside `[]` and are separated by `;`
 - Whitespace around tokens is ignored
-- Lines starting with `#` or `//` are comments and are skipped
-- A line with no `$` prefix is sent verbatim to the Discord channel
-- An unclosed bracket causes a syntax error
-- No Comment (currently)
+- Lines starting with `#` are comments and are skipped
+- Inline comments are also supported: anything after a bare `#` outside brackets is ignored
+- A line with no `$` prefix is sent verbatim to the Discord channel (built-in variables are resolved first)
+- An unclosed `[` causes a syntax error; an extra closing `]` also causes a syntax error
+- The entire script is validated before any line executes — if any error is found, **all errors** are reported and nothing runs
 
 ---
 
@@ -21,14 +21,14 @@ FDScript is a lightweight scripting language for Discord bots. Scripts are execu
 
 ### var
 
-Declares or sets a temporary in-memory variable. The variable lives only for the duration of the script execution.
+Declares or updates a temporary in-memory variable. Variables live only for the duration of the current script execution.
 
-Setter:
+**Setter:**
 ```
 $var[name; value]
 ```
 
-Getter (used inline inside other arguments):
+**Getter (used inline):**
 ```
 $var[name]
 ```
@@ -44,11 +44,13 @@ Output:
 Your score is 10
 ```
 
+> **Variable resolution order:** When `$var[name]` is encountered, the interpreter checks (1) temporary variables set with `$var[name; value]`, then (2) built-in read-only variables. Persistent variables are only accessible via `$getVar[name]`.
+
 ---
 
 ### setVar / getVar
 
-Stores and retrieves persistent variables saved to disk. These values survive across script executions.
+Stores and retrieves persistent variables saved to disk as JSON files. These values survive across script executions.
 
 ```
 $setVar[name; value]
@@ -56,6 +58,8 @@ $getVar[name]
 ```
 
 `$getVar[name]` is used inline inside arguments, not as a standalone command.
+
+Variable names are sanitized to only alphanumeric characters, `-`, and `_` when saved. Each variable is stored as its own `.json` file.
 
 Example:
 ```
@@ -72,7 +76,7 @@ Total visits: 42
 
 ### sendMessage
 
-Sends a text message to the current channel.
+Sends a text message to the current channel (or to the DM target if `$dm` was used).
 
 ```
 $sendMessage[text]
@@ -90,9 +94,51 @@ Hello from the bot!
 
 ---
 
-### embed
+### Embed Builder
 
-Sends a Discord embed with a title, description, and hex color.
+Embeds are built by setting fields individually, then they are automatically sent at the end of script execution.
+
+```
+$title[text]
+$description[text]
+$color[hex or name]
+$footer[text]
+```
+
+All four fields are optional. The embed is only sent if at least one field has been set.
+
+**Color** accepts either a hex string (`2ecc71` or `#2ecc71`) or one of the named colors below:
+
+| Name | Hex | Name | Hex |
+|------|-----|------|-----|
+| `red` | `#E74C3C` | `green` | `#2ECC71` |
+| `blue` | `#3498DB` | `yellow` | `#F1C40F` |
+| `orange` | `#E67E22` | `purple` | `#9B59B6` |
+| `pink` | `#FF69B4` | `white` | `#FFFFFF` |
+| `black` | `#000000` | `gray` / `grey` | `#95A5A6` |
+| `cyan` | `#1ABC9C` | `gold` | `#F9A825` |
+| `navy` | `#2C3E50` | `lime` | `#27AE60` |
+| `brown` | `#A0522D` | `teal` | `#008080` |
+| `magenta` | `#FF00FF` | `blurple` | `#5865F2` |
+| `dark` | `#2B2D31` | | |
+
+If the color value is unrecognized, it falls back to `dark` (`#2B2D31`).
+
+Example:
+```
+$title[Server Update]
+$description[Maintenance starts at 10 PM.]
+$color[orange]
+$footer[Posted by the admin team]
+```
+
+Output: A Discord embed with an orange sidebar, the given title, description, and footer.
+
+---
+
+### embed (legacy)
+
+Sends a Discord embed with a title, description, and hex color in a single command. Unlike the embed builder above, this sends immediately.
 
 ```
 $embed[title; description; hexColor]
@@ -107,28 +153,233 @@ Output: A Discord embed card with the title "Welcome", the given description, an
 
 ---
 
-### strictArgs
+### sendEmbedMessage
 
-Checks that the user provided an argument after the command trigger. If the message has no text beyond the command name, the error message is sent and execution continues.
+Sends a full embed to a **specific channel by ID**. Requires all 5 arguments.
 
 ```
-$strictArgs[; error text]
+$sendEmbedMessage[channelID; title; description; color; footer]
+```
+
+The footer is mandatory. Color accepts hex or named colors (same as `$color`).
+
+Example:
+```
+$sendEmbedMessage[123456789012345678; Announcement; The vote is now open.; blurple; FDBot]
+```
+
+---
+
+### strictArgs
+
+Validates the number of words the user passed after the command trigger. If the condition is not met, the error message is sent and execution **continues** (it does not stop the script).
+
+```
+$strictArgs[comparison; error text]
+```
+
+The comparison checks the word count after the command name. Supported operators: `>` `<` `=` `>=` `<=` `!=`.
+
+Examples:
+
+```
+# Require at least one word
+$strictArgs[>0; Please provide a username.]
+$sendMessage[Looking up: $message]
+```
+
+```
+# Require exactly 2 words
+$strictArgs[=2; Please provide exactly two words.]
+```
+
+> **Note:** In the original simple form `$strictArgs[; error text]`, passing an empty first argument is a logic error. Always provide a comparison expression.
+
+---
+
+### dm
+
+Redirects all subsequent output (plain text and `$sendMessage`) to a DM channel instead of the current channel.
+
+**DM the command author:**
+```
+$dm
+```
+
+**DM a specific user by ID or mention:**
+```
+$dm[userID]
+$dm[<@userID>]
+```
+
+Once set, all output goes to that user's DMs for the rest of the script execution.
+
+Example:
+```
+$dm
+$sendMessage[This message goes to your DMs, $authorName!]
+```
+
+---
+
+### deletecommand
+
+Deletes the message that triggered the command. Requires the bot to have the `Manage Messages` permission in that channel.
+
+```
+$deletecommand
+```
+
+If the bot lacks permission, a `🔵 Environment Error` is sent and execution continues.
+
+---
+
+### clear
+
+Bulk-deletes messages from the current channel. Requires the `Manage Messages` permission.
+
+```
+$clear
+$clear[count]
+```
+
+With no argument, deletes the last **10** messages (default). The maximum is **100** (Discord's bulk-delete limit per request).
+
+Example:
+```
+$clear[25]
+```
+
+---
+
+### clientTyping
+
+Shows a "Bot is typing…" indicator in the channel while the script runs. The indicator is automatically stopped when any message is sent.
+
+```
+$clientTyping
+```
+
+---
+
+### ping
+
+Sends the bot's current WebSocket latency in milliseconds to the channel. Can also be used inline.
+
+```
+$ping
+```
+
+Inline usage:
+```
+$sendMessage[Current latency: $ping]
+```
+
+Output:
+```
+Current latency: 42ms
+```
+
+---
+
+### uptime
+
+Sends the time elapsed since the bot started, formatted as `Xd Xh Xm Xs`. Can also be used inline.
+
+```
+$uptime
+```
+
+Inline usage:
+```
+$sendMessage[Bot has been running for $uptime]
+```
+
+Output:
+```
+Bot has been running for 2d 4h 12m 7s
+```
+
+---
+
+### addTimestamp
+
+Sends a Discord timestamp for the current time. When used as a standalone command it sends the timestamp. When used inline inside another argument, it returns the timestamp string.
+
+**Standalone (default `T` format):**
+```
+$addTimestamp
+```
+
+**With a format code:**
+```
+$addTimestamp[format]
+```
+
+| Format | Display |
+|--------|---------|
+| `t` | Short time: `4:20 PM` |
+| `T` | Long time: `4:20:00 PM` |
+| `d` | Short date: `04/20/2025` |
+| `D` | Long date: `April 20, 2025` |
+| `f` | Short date/time: `April 20, 2025 4:20 PM` |
+| `F` | Long date/time: `Sunday, April 20, 2025 4:20 PM` |
+| `R` | Relative: `2 hours ago` |
+
+Example:
+```
+$sendMessage[Event starts: $addTimestamp[R]]
+```
+
+---
+
+### log
+
+Takes a snapshot of the execution log up to that point and sends it to a specified channel after the script finishes. Useful for auditing command usage.
+
+```
+$log[channelID]
+$log[channelID; name_code]
+```
+
+`name_code` is an optional label that appears in the log header. Multiple `$log` calls in the same script each capture events since the previous `$log` call.
+
+If the log is short enough, it is sent as a code block. If it exceeds Discord's 2000-character limit, it is sent as a `.txt` file attachment (up to 10 MB).
+
+Example:
+```
+$log[987654321098765432; admin-audit]
+```
+
+---
+
+### addUserReactions
+
+Adds emoji reactions to the **user's** triggering message. Accepts any combination of Unicode and custom Discord emojis. Maximum **20** emojis.
+
+```
+$addUserReactions[emoji1; emoji2; ...]
 ```
 
 Example:
 ```
-$strictArgs[; Please provide a username.]
-$sendMessage[Looking up: $message]
+$addUserReactions[👍; ❤️; <:custom:123456789>]
 ```
 
-When the user sends the command with no argument:
+---
+
+### addBotReactions
+
+Adds emoji reactions to the **last message sent by the bot** in this execution. Must be called after at least one bot message has been sent. Maximum **20** emojis.
+
 ```
-Please provide a username.
+$addBotReactions[emoji1; emoji2; ...]
 ```
 
-When the user sends the command followed by a name:
+Example:
 ```
-Looking up: user
+$sendMessage[Cast your vote!]
+$addBotReactions[👍; 👎]
 ```
 
 ---
@@ -137,17 +388,22 @@ Looking up: user
 
 Read-only references resolved at runtime. Use them inline anywhere with `$name`.
 
-| Variable      | Value                                      |
-|---------------|--------------------------------------------|
-| `$authorID`   | Numeric ID of the message author           |
-| `$authorName` | Username of the message author             |
-| `$mention`    | Mention string of the message author       |
-| `$channelID`  | Numeric ID of the current channel          |
-| `$channelName`| Name of the current channel                |
-| `$guildName`  | Name of the current server                 |
-| `$message`    | Text after the command trigger             |
-| `$botName`    | Username of the bot                        |
-| `$botID`      | Numeric ID of the bot                      |
+| Variable | Value |
+|---|---|
+| `$authorID` | Numeric ID of the message author |
+| `$authorName` | Username of the message author |
+| `$mention` | Mention string of the message author (`<@id>`) |
+| `$channelID` | Numeric ID of the current channel |
+| `$channelName` | Name of the current channel |
+| `$guildName` | Name of the current server (`DM` in direct messages) |
+| `$message` | Text after the command trigger (empty if no argument was given) |
+| `$messageID` | Numeric ID of the triggering message |
+| `$botName` | Username of the bot |
+| `$botID` | Numeric ID of the bot |
+| `$ping` | Bot's current WebSocket latency in milliseconds (e.g. `42ms`) |
+| `$uptime` | Time since bot started, formatted as `Xd Xh Xm Xs` |
+| `$addTimestamp` | Discord timestamp for right now using the default `T` format |
+| `$randomUserID` | ID of a random non-bot member of the current server |
 
 Example:
 ```
@@ -163,7 +419,7 @@ Hello user, your ID is 123456789012345678
 
 ## Math Commands
 
-Each command takes exactly two numeric arguments. All five can be used as standalone commands (result is sent to the channel) or inline inside other arguments.
+Each command takes exactly two numeric arguments. All five can be used as standalone commands (result sent to channel) or inline inside other arguments. Integer results are displayed without a decimal point; non-integer results keep their decimal.
 
 ```
 $sum[a; b]
@@ -173,7 +429,7 @@ $div[a; b]
 $mod[a; b]
 ```
 
-Division by zero produces an error message instead of crashing.
+Division by zero produces a `🟡 Runtime Error` instead of crashing.
 
 Example:
 ```
@@ -191,7 +447,7 @@ Output:
 11
 5
 24
-2.66
+2.6666666666666665
 2
 ```
 
@@ -212,7 +468,7 @@ Result is 10
 
 ### randomint
 
-Returns a random integer between `min` and `max` (inclusive). Can be used as a standalone command or inline.
+Returns a random integer between `min` and `max` (inclusive). If `min > max`, they are automatically swapped. Can be used standalone or inline.
 
 ```
 $randomint[min; max]
@@ -223,16 +479,11 @@ Example:
 $sendMessage[Your lucky number: $randomint[1; 100]]
 ```
 
-Output:
-```
-Your lucky number: 42
-```
-
 ---
 
 ### randomstr
 
-Picks one item at random from a list of strings separated by `;`.
+Picks one item at random from a list of strings. Can be used standalone or inline.
 
 ```
 $randomstr[option1; option2; option3; ...]
@@ -241,11 +492,6 @@ $randomstr[option1; option2; option3; ...]
 Example:
 ```
 $randomstr[rock; paper; scissors]
-```
-
-Output (one of):
-```
-paper
 ```
 
 ---
@@ -258,7 +504,7 @@ Picks a random non-bot member from the current server and sends their numeric ID
 $randomUserID
 ```
 
-Example:
+Can also be used inline:
 ```
 $sendMessage[Random member ID: $randomUserID]
 ```
@@ -267,7 +513,9 @@ $sendMessage[Random member ID: $randomUserID]
 
 ## Conditions: if / elif / else / endif
 
-Evaluates a condition and executes the matching branch. Supported operators: `==` `!=` `>` `<` `>=` `<=`. Numeric strings are compared numerically; non-numeric strings fall back to lexicographic comparison.
+Evaluates a condition and executes the matching branch. Supported operators: `==` `!=` `>` `<` `>=` `<=`.
+
+Numeric strings are compared numerically; non-numeric strings fall back to lexicographic comparison. Only `==` and `!=` support string comparison — `>`, `<`, `>=`, `<=` require numeric values.
 
 ```
 $if[condition]
@@ -298,7 +546,7 @@ Grade: B
 
 ### Compound Conditions: $and / $or
 
-Multiple conditions can be combined inside `$if` or `$elif` using `$and` or `$or`. These are not standalone commands.
+Multiple conditions can be combined inside `$if` or `$elif` using `$and` or `$or`. These cannot be used as standalone commands.
 
 ```
 $if[$and[condition1; condition2; ...]]
@@ -355,7 +603,7 @@ Iteration 3
 
 ## for / endfor
 
-Repeats a block a fixed number of times. The count must resolve to a whole number.
+Repeats a block a fixed number of times. The count must resolve to a whole number; floats are truncated to integers.
 
 ```
 $for[count]
@@ -381,7 +629,9 @@ Hello!
 
 ## break
 
-Exits the nearest enclosing `$while` or `$for` loop immediately.
+Exits the nearest enclosing `$while` or `$for` loop immediately. Using `$break` outside a loop is a logic error caught at validation time.
+
+> ⚠️ `$break` is experimental and may behave unexpectedly in some cases.
 
 ```
 $break
@@ -406,9 +656,120 @@ Stopped at 4
 
 ---
 
+## return / returnXxx Commands
+
+These commands store data into named **return variables** that can be retrieved inline with `$return[varName]`.
+
+### return
+
+Reads the value stored by a `$returnXxx` command.
+
+```
+$return[varName]
+```
+
+This is an inline-only command. The variable must have been populated by one of the `$returnXxx` commands below.
+
+---
+
+### returnGuildUsersID
+
+Fetches the IDs of all non-bot members in a server and stores them in a return variable.
+
+```
+$returnGuildUsersID[guildID; fetchMode; var; separator]
+```
+
+| Argument | Description |
+|---|---|
+| `guildID` | Numeric ID of the server |
+| `fetchMode` | `cache` (use cached members) or `chunk` (fetch all members from Discord) |
+| `var` | Name of the return variable to store the result |
+| `separator` | Character or named separator to join IDs (see [Separators](#separators)) |
+
+Example:
+```
+$returnGuildUsersID[$guildID; cache; members; com]
+$sendMessage[Member IDs: $return[members]]
+```
+
+---
+
+### returnGuildChannelsID
+
+Fetches the IDs of channels in a server filtered by type, and stores them in a return variable.
+
+```
+$returnGuildChannelsID[guildID; channelType; var; separator]
+```
+
+| `channelType` | Matches |
+|---|---|
+| `text` | Text channels |
+| `voice` | Voice channels |
+| `category` | Category channels |
+| `forum` | Forum channels |
+| `stage` | Stage channels |
+| `all` | All channel types |
+
+Example:
+```
+$returnGuildChannelsID[$guildID; text; channels; com]
+$sendMessage[Text channel IDs: $return[channels]]
+```
+
+---
+
+### returnGuildRolesID
+
+Fetches the IDs of roles in a server, optionally filtered by a permission, and stores them in a return variable. The `@everyone` role is always excluded.
+
+```
+$returnGuildRolesID[guildID; permission; var; separator]
+```
+
+Leave `permission` empty or use `all` to get all roles. You can also pass a raw permission integer.
+
+Supported named permissions include: `admin`, `manage_guild`, `manage_roles`, `manage_channels`, `manage_messages`, `kick_members`, `ban_members`, `moderate_members`, `send_messages`, `view_channel`, `connect`, `speak`, and many others. Use the error message when in doubt — it lists all valid names.
+
+Example:
+```
+$returnGuildRolesID[$guildID; admin; adminRoles; com]
+$sendMessage[Admin role IDs: $return[adminRoles]]
+```
+
+---
+
+### returnGetReactions
+
+Fetches reaction data from a specific message and stores it in a return variable.
+
+```
+$returnGetReactions[channelID; messageID; type; var; separator; emoji]
+```
+
+| Argument | Description |
+|---|---|
+| `channelID` | Numeric ID of the channel containing the message |
+| `messageID` | Numeric ID of the message |
+| `type` | `usersID` (returns IDs of users who reacted) or `tr` (returns total reaction count) |
+| `var` | Name of the return variable |
+| `separator` | Separator for joining user IDs (only used with `usersID`) |
+| `emoji` | The emoji to look up (Unicode or custom `<:name:id>`) |
+
+With `type = tr`, if the emoji was not found on the message, the result is `0` (no error).
+
+Example:
+```
+$returnGetReactions[$channelID; $messageID; tr; voteCount; com; 👍]
+$sendMessage[Total 👍 votes: $return[voteCount]]
+```
+
+---
+
 ## Plain Text
 
-Any line that does not start with `$` is sent directly to the channel. Built-in variables are resolved before sending.
+Any line that does not start with `$` is sent directly to the channel. Built-in variables and inline commands are resolved before sending.
 
 Example:
 ```
@@ -424,19 +785,64 @@ Your channel is #general.
 
 ---
 
-## Error Handling
+## Separators
 
-FDScript validates all commands before execution begins. If any error is found, execution stops entirely and all errors are reported to the channel. No partial execution occurs.
+Several commands that return lists of IDs accept a `separator` argument. You can pass a literal character or one of the named separator aliases:
 
-| Error                | Cause                                                    |
-|----------------------|----------------------------------------------------------|
-| Unknown command      | A `$name` not in the recognized command list             |
-| Syntax error         | An unclosed `[` bracket                                  |
-| Wrong argument count | Passing the wrong number of arguments to a command       |
-| Non-numeric argument | Passing a string where a number is expected              |
-| Division by zero     | Second argument to `$div` resolves to `0`               |
-| Unmatched block      | `$endif` / `$endwhile` / `$endfor` without an opener    |
-| `$break` outside loop| Using `$break` outside a `$while` or `$for`             |
+| Name | Character |
+|---|---|
+| `dot` | `.` |
+| `com` | `,` |
+| `apo` | `'` |
+| `sem` | `;` |
+| `colon` | `:` |
+
+> **Important:** Because `;` is the argument delimiter, you can **never** pass a semicolon directly as a separator. Use the name `sem` instead.
+
+Example using `com`:
+```
+$returnGuildUsersID[$guildID; cache; ids; com]
+```
+
+---
+
+## Inline Comments
+
+Comments can appear at the end of any line, outside of brackets. Everything after a bare `#` at depth 0 is ignored.
+
+```
+$var[score; 100] # set initial score
+$sendMessage[Score: $var[score]] # send it
+```
+
+---
+
+## Error System
+
+FDScript validates all commands before execution begins. If any error is found, **execution stops entirely** and all errors are reported to the channel. No partial execution occurs.
+
+Errors are categorized by severity and shown with color-coded icons:
+
+| Icon | Category | Common Causes |
+|---|---|---|
+| 🔴 | **Syntax Error** | Unknown command, unclosed bracket, mismatched block |
+| 🟠 | **Logic Error** | Wrong argument count, invalid operator, `$break` outside loop, empty target in `$dm[]` |
+| 🟡 | **Runtime Error** | Division by zero, non-numeric argument where number expected, `$for` count not an integer |
+| 🔵 | **Environment Error** | Channel/guild not found, bot lacks permission, DM user not found |
+
+Full error table:
+
+| Error | Cause |
+|---|---|
+| Unknown command | A `$name` not in the recognized command list |
+| Syntax error | An unclosed `[` or extra `]` |
+| Wrong argument count | Passing the wrong number of arguments to a command |
+| Non-numeric argument | Passing a string where a number is expected |
+| Division by zero | Second argument to `$div` resolves to `0` |
+| Unmatched block | `$endif` / `$endwhile` / `$endfor` without a matching opener, or vice versa |
+| Mismatched block | `$endif` used where `$endwhile` was expected, etc. |
+| `$break` outside loop | Using `$break` outside a `$while` or `$for` |
+| `$and` / `$or` standalone | These can only be used inside a condition |
 
 Example:
 ```
@@ -445,7 +851,7 @@ $wew[now]
 
 Output:
 ```
-Unknown command: wew
+🔴 Syntax Error — Line 1: Unknown command `wew`
 ```
 
 ---
@@ -471,7 +877,7 @@ user, you have used this command 3 times.
 ### Simple guessing game
 
 ```
-$strictArgs[; Please provide a number.]
+$strictArgs[>0; Please provide a number.]
 $var[guess; $message]
 $var[answer; 7]
 $if[$var[guess] == $var[answer]]
@@ -501,6 +907,41 @@ Output: A Discord embed with an orange sidebar, the given title and description.
 
 ---
 
+### DM a specific user
+
+```
+$dm[123456789012345678]
+$sendMessage[Hello! You've been selected for a giveaway.]
+```
+
+---
+
+### Reaction vote collector
+
+```
+$sendMessage[Vote now! 👍 for yes, 👎 for no.]
+$addBotReactions[👍; 👎]
+```
+
+---
+
+### Announce to a specific channel with embed
+
+```
+$sendEmbedMessage[$channelID; Weekly Update; Check out the new changes this week!; blurple; FDBot Announcements]
+```
+
+---
+
+### Audit log snapshot
+
+```
+$sendMessage[Command executed.]
+$log[987654321098765432; command-audit]
+```
+
+---
+
 ## Variable Resolution Order
 
 When `$var[name]` is encountered, the interpreter resolves it in this order:
@@ -509,3 +950,5 @@ When `$var[name]` is encountered, the interpreter resolves it in this order:
 2. Built-in read-only variables such as `$authorID` and `$channelName`
 
 Persistent variables set with `$setVar` are accessed **only** via `$getVar[name]` and are not part of the above lookup chain.
+
+`$return[name]` accesses an entirely separate store — the return variable map — populated only by `$returnXxx` commands.

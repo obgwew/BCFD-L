@@ -35,7 +35,7 @@ import main_exe.core_bcfd.local_server
 
 icon_path = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    'main_exe', 'icons', 'BCFD.ico'
+    'main_exe', 'icons', 'BCFD.png'
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -515,7 +515,7 @@ class CreateBotPopup(Popup):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Warning Popup  (بدون ايموجي)
+#  Warning Popup 
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _show_warning(message: str):
@@ -629,7 +629,7 @@ class MainScreen(Screen):
         header.add_widget(Label(size_hint_x=1))
         root.add_widget(header)
 
-        # ── قائمة البوتات ─────────────────────────────────────────────
+        # ── list bot's ─────────────────────────────────────────────
         scroll = ScrollView(size_hint=(1, 1), pos_hint={'x': 0, 'y': 0},
                             do_scroll_x=False)
         self._grid = GridLayout(
@@ -753,7 +753,9 @@ class MainScreen(Screen):
 class BCFDApp(App):
 
     def build(self):
-        # ── تطبيق الثيم المحفوظ قبل بناء اي شاشة ─────────────────────
+        # تعيين أيقونة النافذة باستخدام المسار المُعرف مسبقاً
+        self.icon = icon_path 
+        
         saved_theme = get_current_theme()
         apply_theme_globally(saved_theme)
         Window.clearcolor = _c('bg')

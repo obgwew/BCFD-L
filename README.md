@@ -13,7 +13,7 @@
 **Notes:**
 
 - Some features require a restart to take effect.
-- The built-in command set is function ready - FDScript itself handles the heavy lifting.
+- The built-in command set is intentionally minimal — FDScript itself handles the heavy lifting.
 - Very large or deeply nested scripts may produce unexpected behavior.
 
 ---
@@ -31,12 +31,19 @@
   - Fixed crash on startup
   - Fixed server connection issue
 
-- **2.0.0** — Feature update & reconstruction Structure
+- **2.0.0** — Feature update
   - Improved UI
   - Added 5 new commands
   - Fixed bot file conflicts
   - Added settings panel
   - Added theme support
+
+- **2.0.1** — FDScript Growth & Some Fixes
+  - add a new 20+ command's to FDScript 
+  - fixed some Themes 
+  - fixed button research of command_view 
+  - fixed input's in settings_view 
+  - replace icon kivy to BCFD
 
 ---
 

@@ -4,16 +4,17 @@
 import os
 import json
 
-from kivy.uix.boxlayout   import BoxLayout
-from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.scrollview  import ScrollView
-from kivy.uix.gridlayout  import GridLayout
-from kivy.uix.label       import Label
-from kivy.uix.button      import Button
-from kivy.uix.textinput   import TextInput
-from kivy.uix.widget      import Widget
-from kivy.metrics         import dp
-from kivy.graphics        import Color, RoundedRectangle, Line, Ellipse
+from kivy.uix.boxlayout          import BoxLayout
+from kivy.uix.floatlayout        import FloatLayout
+from kivy.uix.scrollview         import ScrollView
+from kivy.uix.gridlayout         import GridLayout
+from kivy.uix.label              import Label
+from kivy.uix.button             import Button
+from kivy.uix.textinput          import TextInput
+from kivy.uix.widget             import Widget
+from kivy.metrics                import dp
+from kivy.utils                  import get_color_from_hex
+from kivy.graphics               import Color, RoundedRectangle, Line, Ellipse
 
 from main_exe.langs.translations import Translations
 from main_exe.settings           import get_current_lang
@@ -59,41 +60,22 @@ def _draw_card(widget, radius: int = 12):
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Storage helpers
-#
-#  البنية المطلوبة:
-#    app_data/
-#    └── {bot_name}/
-#        ├── bot_files/       ← هذا هو bot_dir المُمرَّر
-#        ├── bot_commands/
-#        └── bot_vars/
-#
-#  إذن:  bot_root  = dirname(bot_dir)   = app_data/{bot_name}/
-#        vars_dir  = bot_root/bot_vars
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _bot_root_from_dir(bot_dir: str) -> str:
-    """
-    bot_dir  = .../app_data/{bot_name}/bot_files
-    bot_root = .../app_data/{bot_name}
-    """
     return os.path.dirname(os.path.abspath(bot_dir))
 
-
 def _vars_dir(bot_dir: str) -> str:
-    """app_data/{bot_name}/bot_vars"""
     return os.path.join(_bot_root_from_dir(bot_dir), 'bot_vars')
-
 
 def _ensure_vars_dir(bot_dir: str) -> str:
     path = _vars_dir(bot_dir)
     os.makedirs(path, exist_ok=True)
     return path
 
-
 def _var_path(bot_dir: str, name: str) -> str:
     safe = ''.join(c for c in name if c.isalnum() or c in ('-', '_')).strip() or 'var'
     return os.path.join(_vars_dir(bot_dir), f'{safe}.json')
-
 
 def _load_all_vars(bot_dir: str) -> list:
     d = _vars_dir(bot_dir)
@@ -114,25 +96,19 @@ def _load_all_vars(bot_dir: str) -> list:
             print(f'[Variables] load error {fpath}: {e}')
     return result
 
-
 def _write_var(bot_dir: str, name: str, value: str, old_path: str = '') -> str:
     new_path = _var_path(bot_dir, name)
-
     if old_path and os.path.abspath(old_path) != os.path.abspath(new_path):
         if os.path.isfile(old_path):
             try:
                 os.remove(old_path)
             except Exception:
                 pass
-
     _ensure_vars_dir(bot_dir)
-
     with open(new_path, 'w', encoding='utf-8') as f:
         json.dump({'name': name, 'value': value}, f, ensure_ascii=False, indent=2)
-
     print(f'[Variables] saved → {new_path}')
     return new_path
-
 
 def _delete_var(path: str):
     if os.path.isfile(path):
@@ -148,28 +124,54 @@ def _delete_var(path: str):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class BotVariablesTab(BoxLayout):
-    """
-    تبويب إدارة المتغيرات — شاشتان:
-      • list_view  : قائمة المتغيرات + بحث + FAB
-      • editor_view: نموذج إنشاء / تعديل
-
-    البنية على القرص:
-      app_data/{bot_name}/bot_vars/{var_name}.json
-      كل ملف: {"name": "...", "value": "..."}
-
-    الاستخدام:
-      tab = BotVariablesTab()
-      tab.load_bot(bot_dir)   # bot_dir = app_data/{bot_name}/bot_files
-    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.orientation   = 'vertical'
-        self._bot_dir      = ''   # app_data/{bot_name}/bot_files
-        self._variables    = []   # list[{"name", "value", "_path"}]
-        self._edit_path    = ''   # مسار الملف المفتوح للتعديل
+        self._bot_dir      = ''
+        self._variables    = []
+        self._edit_path    = ''
         self._current_view = 'list'
         self._build()
+        ThemeEngine.subscribe(self._on_theme)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  Theme callback
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _on_theme(self, data: dict):
+        c = lambda k: get_color_from_hex(data.get(k, '#888888'))
+
+        # ── List view widgets ─────────────────────────────────────────
+        self._empty_lbl.color             = c('text_dim')
+
+        # search box
+        self._search_inp.background_color = c('card_bg')
+        self._search_inp.foreground_color = c('text')
+        self._search_inp.cursor_color     = c('accent')
+        self._search_bg_color.rgba        = list(c('card_bg'))
+        self._search_bd_color.rgba        = list(c('card_border'))
+
+        # FAB
+        self._fab_color.rgba              = list(c('accent'))
+
+        # ── Editor view widgets ───────────────────────────────────────
+        self._editor_title.color          = c('text')
+        self._del_bg_color.rgba           = list(c('danger'))
+        self._back_btn.background_color   = c('accent')
+        self._name_lbl.color              = c('text')
+        self._value_lbl.color             = c('text')
+        self._name_inp.background_color   = c('card_bg')
+        self._name_inp.foreground_color   = c('text')
+        self._name_inp.cursor_color       = c('accent')
+        self._value_inp.background_color  = c('card_bg')
+        self._value_inp.foreground_color  = c('text')
+        self._value_inp.cursor_color      = c('accent')
+        self._save_bg_color.rgba          = list(c('accent'))
+
+        # إعادة رسم القائمة بألوان الثيم الجديد
+        if self._current_view == 'list':
+            self._refresh_list()
 
     # ══════════════════════════════════════════════════════════════════════════
     #  Storage
@@ -202,7 +204,7 @@ class BotVariablesTab(BoxLayout):
             orientation='horizontal',
             size_hint=(1, None), height=dp(52),
             pos_hint={'top': 1},
-            padding=[dp(16), dp(9), dp(12), dp(9)],
+            padding=[dp(16), dp(9), dp(16), dp(9)],
             spacing=dp(8),
         )
         title_lbl = Label(
@@ -216,26 +218,26 @@ class BotVariablesTab(BoxLayout):
         header.add_widget(title_lbl)
         header.add_widget(Widget(size_hint_x=1))
 
-        # Search input
+        # Search input — تم توسيع الحقل إلى 180dp لتعويض مكان الزر المحذوف
         self._search_inp = TextInput(
             hint_text='Search...',
             hint_text_color=(0.5, 0.5, 0.5, 0.55),
-            foreground_color=(0.1, 0.1, 0.1, 1),
+            foreground_color=_c('text'),
             background_color=(0, 0, 0, 0),
-            cursor_color=(0.1, 0.1, 0.2, 1),
+            cursor_color=_c('accent'),
             font_size=dp(13), font_name=_font(),
             multiline=False,
-            size_hint=(None, None), size=(dp(150), dp(34)),
+            size_hint=(None, None), size=(dp(180), dp(34)),
             padding=[dp(10), dp(8)],
         )
         with self._search_inp.canvas.before:
-            Color(*_c('card_bg'))
+            self._search_bg_color = Color(*_c('card_bg'))
             _sbg = RoundedRectangle(
                 pos=self._search_inp.pos,
                 size=self._search_inp.size,
                 radius=[dp(8)],
             )
-            Color(*_c('card_border'))
+            self._search_bd_color = Color(*_c('card_border'))
             _sbd = Line(
                 rounded_rectangle=(
                     self._search_inp.x, self._search_inp.y,
@@ -258,16 +260,6 @@ class BotVariablesTab(BoxLayout):
         self._search_inp.bind(text=lambda i, v: self._refresh_list())
         header.add_widget(self._search_inp)
 
-        srch_btn = Button(
-            text='🔍',
-            size_hint=(None, None), size=(dp(34), dp(34)),
-            background_normal='', background_color=_c('accent'),
-            color=(1, 1, 1, 1), font_size=dp(15), font_name=_font(),
-        )
-        srch_btn.bind(on_press=lambda x: self._refresh_list())
-        header.add_widget(srch_btn)
-        root.add_widget(header)
-
         # ScrollView / Grid
         sv = ScrollView(
             size_hint=(1, 1), pos_hint={'x': 0, 'y': 0}, do_scroll_x=False,
@@ -278,7 +270,10 @@ class BotVariablesTab(BoxLayout):
         )
         self._grid.bind(minimum_height=self._grid.setter('height'))
         sv.add_widget(self._grid)
+        
+        # ترتيب الإضافة هنا جوهري: ScrollView أولاً ثم Header فوقه لضمان استجابة اللمس والكتابة
         root.add_widget(sv)
+        root.add_widget(header)
 
         # Empty state
         self._empty_lbl = Label(
@@ -291,7 +286,7 @@ class BotVariablesTab(BoxLayout):
         self._empty_lbl.bind(size=lambda i, v: setattr(i, 'text_size', v))
         root.add_widget(self._empty_lbl)
 
-        # FAB (+)
+        # FAB (+) — نحفظ Color كـ self._fab_color
         fab = Button(
             text='+',
             size_hint=(None, None), size=(dp(52), dp(52)),
@@ -301,11 +296,11 @@ class BotVariablesTab(BoxLayout):
             font_name=_font(),
         )
         with fab.canvas.before:
-            Color(*_c('accent'))
-            _fc = Ellipse(pos=fab.pos, size=fab.size)
+            self._fab_color = Color(*_c('accent'))
+            self._fab_ellipse = Ellipse(pos=fab.pos, size=fab.size)
         fab.bind(
-            pos=lambda i, v: setattr(_fc, 'pos', v),
-            size=lambda i, v: setattr(_fc, 'size', v),
+            pos=lambda i, v: setattr(self._fab_ellipse, 'pos', v),
+            size=lambda i, v: setattr(self._fab_ellipse, 'size', v),
         )
         fab.bind(on_press=lambda x: self._open_editor(''))
         root.add_widget(fab)
@@ -330,6 +325,7 @@ class BotVariablesTab(BoxLayout):
             spacing=dp(10),
         )
 
+        # زر الحذف — نحفظ Color كـ self._del_bg_color
         self._del_btn = Button(
             text='X',
             size_hint=(None, None), size=(dp(36), dp(36)),
@@ -338,7 +334,7 @@ class BotVariablesTab(BoxLayout):
             font_name=_font(),
         )
         with self._del_btn.canvas.before:
-            Color(*_c('danger'))
+            self._del_bg_color = Color(*_c('danger'))
             _dc = Ellipse(pos=self._del_btn.pos, size=self._del_btn.size)
         self._del_btn.bind(
             pos=lambda i, v: setattr(_dc, 'pos', v),
@@ -357,33 +353,36 @@ class BotVariablesTab(BoxLayout):
         self._editor_title.bind(size=lambda i, v: setattr(i, 'text_size', v))
         title_row.add_widget(self._editor_title)
 
-        back_btn = Button(
+        self._back_btn = Button(
             text='←',
             size_hint=(None, None), size=(dp(36), dp(36)),
             background_normal='', background_color=_c('accent'),
             color=(1, 1, 1, 1), font_size=dp(18), font_name=_font(),
         )
-        back_btn.bind(on_press=lambda x: self._show_list())
-        title_row.add_widget(back_btn)
+        self._back_btn.bind(on_press=lambda x: self._show_list())
+        title_row.add_widget(self._back_btn)
         root.add_widget(title_row)
 
-        root.add_widget(self._editor_label(_t('variable_name')))
+        # حقل الاسم
+        self._name_lbl = self._editor_label(_t('variable_name'))
+        root.add_widget(self._name_lbl)
         self._name_inp = self._editor_field('exp: (wew)')
         root.add_widget(self._name_inp)
 
-        root.add_widget(self._editor_label(_t('variable_value')))
+        # حقل القيمة
+        self._value_lbl = self._editor_label(_t('variable_value'))
+        root.add_widget(self._value_lbl)
         self._value_inp = self._editor_field('exp: (1,2,3...)')
         root.add_widget(self._value_inp)
 
         root.add_widget(Widget(size_hint_y=1))
 
-        # Save button (pill)
+        # زر الحفظ — نحفظ Color كـ self._save_bg_color
         save_row = BoxLayout(
             orientation='horizontal',
             size_hint=(1, None), height=dp(50),
         )
         save_row.add_widget(Widget(size_hint_x=1))
-
         save_btn = Button(
             text=_t('save'),
             size_hint=(None, None), size=(dp(110), dp(44)),
@@ -392,7 +391,7 @@ class BotVariablesTab(BoxLayout):
             font_name=_font(),
         )
         with save_btn.canvas.before:
-            Color(*_c('accent'))
+            self._save_bg_color = Color(*_c('accent'))
             _sv = RoundedRectangle(pos=save_btn.pos, size=save_btn.size, radius=[dp(22)])
         save_btn.bind(
             pos=lambda i, v: setattr(_sv, 'pos', v),
@@ -418,9 +417,9 @@ class BotVariablesTab(BoxLayout):
         return TextInput(
             hint_text=hint,
             hint_text_color=(0.5, 0.5, 0.5, 0.5),
-            foreground_color=(0.1, 0.1, 0.1, 1),
-            background_color=(0.96, 0.96, 0.97, 1),
-            cursor_color=(0.1, 0.1, 0.18, 1),
+            foreground_color=_c('text'),
+            background_color=_c('card_bg'),
+            cursor_color=_c('accent'),
             font_size=dp(14), font_name=_font(),
             multiline=False,
             size_hint=(1, None), height=dp(46),
@@ -439,9 +438,7 @@ class BotVariablesTab(BoxLayout):
         self._current_view = 'list'
 
     def _open_editor(self, var_path: str):
-        """var_path='' → جديد  |  var_path='...' → تعديل"""
         self._edit_path = var_path
-
         if not var_path:
             self._name_inp.text     = ''
             self._value_inp.text    = ''
@@ -456,7 +453,6 @@ class BotVariablesTab(BoxLayout):
             self._editor_title.text = f'Variables / {name}.json'
             self._del_btn.opacity   = 1
             self._del_btn.disabled  = False
-
         self.clear_widgets()
         self.add_widget(self._editor_root)
         self._current_view = 'editor'
@@ -468,16 +464,13 @@ class BotVariablesTab(BoxLayout):
     def _refresh_list(self):
         self._grid.clear_widgets()
         q = self._search_inp.text.strip().lower()
-
         filtered = [
             v for v in self._variables
             if not q
             or q in v.get('name',  '').lower()
             or q in v.get('value', '').lower()
         ]
-
         self._empty_lbl.opacity = 0 if filtered else 1
-
         for num, var in enumerate(filtered, start=1):
             self._grid.add_widget(self._var_card(num, var))
 
@@ -520,15 +513,12 @@ class BotVariablesTab(BoxLayout):
     def _save_variable(self, _):
         name  = self._name_inp.text.strip()
         value = self._value_inp.text.strip()
-
         if not name:
             self._name_inp.hint_text = _t('enter_variable_name')
             return
-
         if not self._bot_dir:
             print('[Variables] bot_dir not set')
             return
-
         _write_var(self._bot_dir, name, value, self._edit_path)
         self._show_list()
 
@@ -542,10 +532,6 @@ class BotVariablesTab(BoxLayout):
     # ══════════════════════════════════════════════════════════════════════════
 
     def load_bot(self, bot_dir: str):
-        """
-        bot_dir = app_data/{bot_name}/bot_files
-        ستُحفظ المتغيرات في: app_data/{bot_name}/bot_vars/
-        """
         self._bot_dir = bot_dir
         self._load_variables()
         if self._current_view == 'list':

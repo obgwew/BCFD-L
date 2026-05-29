@@ -253,19 +253,28 @@ class BotMainTab(BoxLayout):
         )
         self._whats_lbl.bind(size=lambda i, v: setattr(i, 'text_size', v))
         self._content.add_widget(self._whats_lbl)
-
+        
+        # www...
         self._news_box = BoxLayout(
-            size_hint=(1, None), height=dp(120),
-            padding=[dp(14), dp(12), dp(14), dp(12)],
+        size_hint=(1, None), height=dp(120),
+        padding=[dp(14), dp(12), dp(14), dp(12)],
         )
         self._news_box_refs = _card(self._news_box, radius=12)
         self._news_lbl = Label(
-            text=_read_new_txt(), font_size=dp(13),
-            color=_c('text_dim'), font_name=_font(),
-            halign='left', valign='top', size_hint=(1, 1),
+        text=_read_new_txt(), font_size=dp(13),
+        color=_c('text_dim'), font_name=_font(),
+        halign='left', valign='top',
+        size_hint=(1, None),
         )
-        self._news_lbl.bind(size=lambda i, v: setattr(i, 'text_size', v))
+        self._news_lbl.bind(
+        texture_size=lambda i, v: (
+            setattr(i, 'height', v[1]),
+            setattr(self._news_box, 'height', v[1] + dp(24)),
+        )
+        )
+        self._news_lbl.bind(width=lambda i, v: setattr(i, 'text_size', (v, None)))
         self._news_box.add_widget(self._news_lbl)
+        #www
         self._content.add_widget(self._news_box)
 
         self._scroll.add_widget(self._content)
@@ -275,7 +284,7 @@ class BotMainTab(BoxLayout):
 
     def _on_theme(self, data: dict):
         """يُستدعى من ThemeEngine عند كل تغيير ثيم — يُحدّث الألوان فوراً."""
-        c = lambda k: get_color_from_hex(data.get(k, '#888888'))
+        c = lambda k: get_color_from_hex(data.get(k, "#555555"))
 
         self._name_lbl.color              = c('text')
         self._invite_btn.background_color = c('btn_invite')
@@ -628,12 +637,11 @@ class BotDashboardScreen(Screen):
             self._content_area.add_widget(self._settings_tab)
 
     def load_bot(self, bot_dir: str):
-    # bot_dir = app_data/{bot_name}
         config_path = os.path.join(bot_dir, 'bot_files', 'config.json')
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 bot_data = json.load(f)
-            bot_data['bot_dir'] = os.path.join(bot_dir, 'bot_files') 
+            bot_data['bot_dir'] = bot_dir     
         except Exception as e:
             print(f"[Dashboard] failed to read config.json: {e}")
             bot_data = {}
@@ -644,6 +652,7 @@ class BotDashboardScreen(Screen):
         self._main_tab.load_bot(bot_data)
         self._commands_tab.load_bot(bot_files_dir)
         self._variables_tab.load_bot(bot_files_dir)
+        self._settings_tab.load_bot(bot_data)
         self._switch_tab('main')
     
     def _go_back(self, _):

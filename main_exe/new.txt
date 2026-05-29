@@ -1,9 +1,11 @@
-welcome to update 2.5.2.01
+welcome to update 2.0.1
 
-- add a new ui
+- add a new 20+ command's to FDScript 
 
-- add a new command's
+- fixed some Themes 
 
-- fixed bot_files
+- fixed button research of command_view 
 
-- add a new Themes
+- fixed input's in settings_view 
+
+- replace icon kivy to BCFD
