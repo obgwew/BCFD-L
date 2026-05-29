@@ -659,6 +659,8 @@ Stopped at 4
 
 These commands store data into named **return variables** that can be retrieved inline with `$return[varName]`.
 
+> Notes: Some of these commands are 'sensitive' and should only be used for very specific purposes. You are responsible for any use of these commands.
+
 ### return
 
 Reads the value stored by a `$returnXxx` command.
@@ -674,6 +676,8 @@ This is an inline-only command. The variable must have been populated by one of 
 ### returnGuildUsersID
 
 Fetches the IDs of all non-bot members in a server and stores them in a return variable.
+
+> Notes: It is preferable not to use 'chunk' if the server has more than 5k-10k and more users, as the bot's response may be delayed by several minutesb or bot Exposed to ban. Use 'cache' as long as the number of members on your server does not exceed 50k-100k users.
 
 ```
 $returnGuildUsersID[guildID; fetchMode; var; separator]
@@ -742,6 +746,8 @@ $sendMessage[Admin role IDs: $return[adminRoles]]
 ### returnGetReactions
 
 Fetches reaction data from a specific message and stores it in a return variable.
+
+> Notes: This is considered less sensitive, but it should be noted that if the number of reactions exceeds 5k or more, for example up to 100k, it is preferable not to use (the command still needs more maintenance and adjustment).
 
 ```
 $returnGetReactions[channelID; messageID; type; var; separator; emoji]
