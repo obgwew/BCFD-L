@@ -15,6 +15,8 @@ FDScript is a lightweight scripting language for Discord bots. Scripts are execu
 - An unclosed `[` causes a syntax error; an extra closing `]` also causes a syntax error
 - The entire script is validated before any line executes — if any error is found, **all errors** are reported and nothing runs
 
+> Notes: Commands that start with '$' are considered a command regardless of the function it performs, so most commands are a combination of functions, variables, and states. 
+
 ---
 
 ## Commands
@@ -133,24 +135,7 @@ $footer[Posted by the admin team]
 ```
 
 Output: A Discord embed with an orange sidebar, the given title, description, and footer.
-
----
-
-### embed (legacy)
-
-Sends a Discord embed with a title, description, and hex color in a single command. Unlike the embed builder above, this sends immediately.
-
-```
-$embed[title; description; hexColor]
-```
-
-Example:
-```
-$embed[Welcome; Thanks for joining the server.; 2ecc71]
-```
-
-Output: A Discord embed card with the title "Welcome", the given description, and a green sidebar color.
-
+
 ---
 
 ### sendEmbedMessage
