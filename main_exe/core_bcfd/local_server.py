@@ -10,14 +10,14 @@ import threading
 import time
 from main_exe.core_bcfd.FDScript import run_script, set_vars_dir, set_bot_start_time
 
-
 # ══════════════════════════════════════════════════════════════
-#  PrefixManager — يقرأ مباشرة من bot_commands/
+#  PrefixManager 
 # ══════════════════════════════════════════════════════════════
 
 class PrefixManager:
     def __init__(self):
         self._bot_commands_dir = ''
+        self._bot_events_dir = ''  
 
     def set_bot_dir(self, bot_dir: str):
         abs_dir = os.path.abspath(bot_dir)
@@ -26,118 +26,190 @@ class PrefixManager:
         else:
             bot_root = abs_dir
         self._bot_commands_dir = os.path.join(bot_root, 'bot_commands')
+        self._bot_events_dir = os.path.join(bot_root, 'bot_events') 
 
-    def _load_commands(self) -> list[dict]:  
-        if not os.path.isdir(self._bot_commands_dir):
-            return []
+    def get_event_script(self, event_name: str) -> str | None:
+        if not os.path.isdir(self._bot_events_dir):
+            return None
 
-        cmds = []
-        for fname in os.listdir(self._bot_commands_dir):
-            if not fname.endswith('.py'):
+        for fname in os.listdir(self._bot_events_dir):
+            fpath = os.path.join(self._bot_events_dir, fname)
+            if not os.path.isfile(fpath):
                 continue
-            path = os.path.join(self._bot_commands_dir, fname)
             try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    raw = f.read()
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                if not content.strip():
+                    continue
+                    
+                first_line = content.split('\n')[0].strip().replace(" ", "").upper()
+                if first_line.startswith("#PREFIX:"):
+                    prefix_part = first_line.replace("#PREFIX:", "").split('[')[0]
+                    if prefix_part == event_name.upper():
+                        return content
             except Exception:
+                pass
+        return None
+
+    def get_script_by_message(self, message_content: str) -> str | None:
+        """فحص الأوامر العادية ذات البادئة الثابتة من مجلد bot_commands"""
+        if not os.path.isdir(self._bot_commands_dir):
+            return None
+
+        for fname in os.listdir(self._bot_commands_dir):
+            fpath = os.path.join(self._bot_commands_dir, fname)
+            if not os.path.isfile(fpath):
                 continue
-
-            prefix  = ''
-            content = raw
-            if raw.startswith('#PREFIX:'):
-                nl      = raw.find('\n')
-                prefix  = raw[8:nl].strip() if nl != -1 else raw[8:].strip()
-                content = raw[nl + 1:] if nl != -1 else ''
-
-            if prefix:
-                cmds.append({'prefix': prefix, 'content': content, 'file': fname})
-
-        return cmds
-
-    def get_script_by_message(self, content: str) -> str | None:
-        """
-        يرجع نص FDScript إذا تطابق الـ prefix
-        يُعيد None إذا لم يتطابق أي أمر
-        """
-        content = content.strip()
-        for cmd in self._load_commands():
-            if content.startswith(cmd['prefix']):
-                return cmd['content']
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                if not content.strip():
+                    continue
+                
+                first_line = content.split('\n')[0].strip()
+                if first_line.upper().startswith("#PREFIX:"):
+                    prefix = first_line.split(":", 1)[1].strip()
+                    if message_content.strip().startswith(prefix):
+                        return content
+            except Exception:
+                pass
         return None
 
 
+# ─────────────────────────────────────────────────────────────
+#  إعدادات المتغيرات العامة للبوت
+# ─────────────────────────────────────────────────────────────
+
+_client = None
+_thread = None
+_loop = None
+_stopping = False
 prefix_manager = PrefixManager()
 
-_client:  discord.Client | None = None
-_loop:    asyncio.AbstractEventLoop | None = None
-_thread:  threading.Thread | None = None
-_lock     = threading.Lock()
-_stopping = False
+
+def _get_token(bot_dir: str) -> str:
+    possible_paths = [
+        # 1. المسار المباشر (كما كان)
+        os.path.join(bot_dir, 'config.json'),
+        
+        # 2. داخل مجلد bot_files (الحالة الصحيحة عندك)
+        os.path.join(bot_dir, 'bot_files', 'config.json'),
+        
+        # 3. في المجلد الأب (احتياطي)
+        os.path.join(os.path.dirname(bot_dir), 'config.json'),
+        
+        # 4. في المجلد الأب + bot_files
+        os.path.join(os.path.dirname(bot_dir), 'bot_files', 'config.json'),
+    ]
+
+    print(f"[DEBUG] bot_dir المستلم: {bot_dir}")
+
+    for path in possible_paths:
+        print(f"[DEBUG] جاري البحث في: {path}")
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8-sig') as f:
+                    data = json.load(f)
+                
+                token = data.get('token') or data.get('TOKEN') or data.get('bot_token')
+                if token:
+                    print(f"[DEBUG] ✅ تم العثور على التوكن في: {path}")
+                    return str(token)
+                else:
+                    print(f"[DEBUG] الملف موجود لكن لا يحتوي على 'token'")
+            except Exception as e:
+                print(f"[ERROR] خطأ في قراءة {path}: {e}")
+
+    print("[Bot] ❌ لم يتم العثور على config.json في أي مسار متوقع")
+    return ''
 
 
-def _make_bot() -> commands.Bot:
-    bot = commands.Bot(
-        command_prefix='!',
-        intents=discord.Intents.all(),
-        help_command=None,
-    )
+# ══════════════════════════════════════════════════════════════
+#  بناء البوت وربط الأحداث المستقلة (event_FDScripts)
+# ══════════════════════════════════════════════════════════════
+
+def _make_bot():
+    intents = discord.Intents.default()
+    intents.message_content = True
+    intents.members = True
+    
+    bot = commands.Bot(command_prefix="!", intents=intents)
 
     @bot.event
     async def on_ready():
+        print(f"[Bot] تم تسجيل الدخول بنجاح كـ: {bot.user}")
         set_bot_start_time(time.time())
-        print(f'[Bot] {bot.user} متصل وجاهز!')
 
+    # ── 1. حدث دخول الأعضاء ($onJoined) ──
+    @bot.event
+    async def on_member_join(member):
+        script_text = prefix_manager.get_event_script("$onJoined")
+        if script_text:
+            try:
+                from main_exe.core_bcfd.event_FDScripts.onJoined import handle_event
+                await handle_event(member, bot, script_text)
+            except Exception as e:
+                print(f"[Bot] خطأ في تنفيذ حدث $onJoined: {e}")
+
+    # ── 2. حدث خروج الأعضاء ($onLeave) ──
+    @bot.event
+    async def on_member_remove(member):
+        script_text = prefix_manager.get_event_script("$onLeave")
+        if script_text:
+            try:
+                from main_exe.core_bcfd.event_FDScripts.onLeave import handle_event
+                await handle_event(member, bot, script_text)
+            except Exception as e:
+                print(f"[Bot] خطأ في تنفيذ حدث $onLeave: {e}")
+
+    # ── 3. حدث معالجة الرسائل والردود الشات ──
     @bot.event
     async def on_message(message):
+        # تجاهل رسائل البوتات تماماً لتجنب الحلقات اللانهائية
         if message.author.bot:
             return
 
-        # ── البحث عن أمر مطابق في bot_commands/ ──────────────────
+        # أ. تشغيل حدث الرد الدائم ($alwaysReply) أولاً مع كل رسالة جديدة
+        always_script = prefix_manager.get_event_script("$alwaysReply")
+        if always_script:
+            try:
+                from main_exe.core_bcfd.event_FDScripts.alwaysReply import handle_event as handle_always_reply
+                await handle_always_reply(message, bot, always_script)
+            except Exception as e:
+                print(f"[Bot] خطأ في تنفيذ حدث $alwaysReply: {e}")
+
+        # ب. فحص الأوامر العادية المكتوبة ببادئة مخصصة وتشغيلها
         script_text = prefix_manager.get_script_by_message(message.content)
         if script_text is not None:
             try:
                 await run_script(message, bot, script_text)
             except Exception as e:
                 print(f"[Bot] خطأ في تنفيذ السكربت: {e}")
-            return   # لا تكمل لـ process_commands
+            return
 
         await bot.process_commands(message)
 
     return bot
 
 
-def _get_token(bot_dir: str) -> str:
-    try:
-        config_path = os.path.join(bot_dir, "bot_files",'config.json')
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        return config.get('token', '')
-    except Exception as e:
-        print(f"[Bot] خطأ في قراءة config.json: {e}")
-        return ''
+# ══════════════════════════════════════════════════════════════
+#  دوال تشغيل وإيقاف البوت عبر خيوط المعالجة (Threading)
+# ══════════════════════════════════════════════════════════════
 
-
-def _runner(token: str) -> None:
-    global _loop, _stopping
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    with _lock:
-        _loop = loop
+def _runner(token: str):
+    global _loop, _client, _stopping
+    _loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_loop)
+    
     try:
-        loop.run_until_complete(_client.start(token))
-    except asyncio.CancelledError:
-        pass
+        _loop.run_until_complete(_client.start(token))
     except Exception as e:
-        print(f"[Bot] خطأ: {e}")
+        print(f"[Bot] خطأ أثناء التشغيل: {e}")
     finally:
-        try:
-            loop.run_until_complete(loop.shutdown_asyncgens())
-            loop.run_until_complete(loop.shutdown_default_executor())
-        except Exception:
-            pass
-        loop.close()
-        with _lock:
-            _stopping = False
+        _stopping = False
+        _client = None
 
 
 def start_bot(bot_dir: str) -> bool:
@@ -156,16 +228,19 @@ def start_bot(bot_dir: str) -> bool:
         print("[Bot] لا يوجد توكن في config.json")
         return False
 
-    # ── ربط PrefixManager بـ bot_dir ──────────────────────────
+    # ربط المسارات بـ PrefixManager
     prefix_manager.set_bot_dir(bot_dir)
 
     bot_root = os.path.dirname(os.path.abspath(bot_dir))
-    set_vars_dir(os.path.join(bot_root, 'bot_vars'))
+    if os.path.basename(bot_root).lower() == 'bot_files':
+        set_vars_dir(os.path.join(os.path.dirname(bot_root), 'bot_vars'))
+    else:
+        set_vars_dir(os.path.join(bot_root, 'bot_vars'))
 
     _client = _make_bot()
     _thread = threading.Thread(target=_runner, args=(token,), daemon=True)
     _thread.start()
-    print("[Bot] تم التشغيل")
+    print("[Bot] تم التشغيل بنجاح")
     return True
 
 
@@ -177,21 +252,4 @@ def stop_bot() -> None:
         return
     _stopping = True
     if _loop and _loop.is_running():
-        future = asyncio.run_coroutine_threadsafe(_client.close(), _loop)
-        try:
-            future.result(timeout=5)
-        except Exception as e:
-            print(f"[Bot] خطأ في الإيقاف: {e}")
-    print("[Bot] تم الإيقاف")
-
-
-def restart_bot(bot_dir: str) -> bool:
-    stop_bot()
-    if _thread and _thread.is_alive():
-        _thread.join(timeout=6)
-    return start_bot(bot_dir)
-
-
-def is_running() -> bool:
-    return bool(_client and not _client.is_closed())
-#set_bot_dir
+        asyncio.run_coroutine_threadsafe(_client.close(), _loop)

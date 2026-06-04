@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 # main_exe/langs/translations.py
 
@@ -218,4 +219,3 @@ class Translations:
                 return get_display(reshaped)
             except Exception:
                 pass
-        return text

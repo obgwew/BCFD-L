@@ -1,11 +1,12 @@
-welcome to update 2.0.1
+welcome to update 2.1.0
 
-- add a new 20+ command's to FDScript 
+- update FDScript to gen 2.
 
-- fixed some Themes 
+- add a event commands.
 
-- fixed button research of command_view 
+- can you now delete bot.
 
-- fixed input's in settings_view 
+- can you now upload/download bot data.
 
-- replace icon kivy to BCFD
+- add a admin commands.
+

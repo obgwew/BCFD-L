@@ -10,7 +10,7 @@ from kivy.uix.scrollview         import ScrollView
 from kivy.uix.gridlayout         import GridLayout
 from kivy.uix.label              import Label
 from kivy.uix.button             import Button
-from kivy.uix.textinput          import TextInput
+from kivymd.uix.textfield        import MDTextField as TextInput
 from kivy.uix.widget             import Widget
 from kivy.metrics                import dp
 from kivy.utils                  import get_color_from_hex
@@ -146,9 +146,7 @@ class BotVariablesTab(BoxLayout):
         self._empty_lbl.color             = c('text_dim')
 
         # search box
-        self._search_inp.background_color = c('card_bg')
-        self._search_inp.foreground_color = c('text')
-        self._search_inp.cursor_color     = c('accent')
+        self._search_inp.font_name = _font()
         self._search_bg_color.rgba        = list(c('card_bg'))
         self._search_bd_color.rgba        = list(c('card_border'))
 
@@ -162,11 +160,9 @@ class BotVariablesTab(BoxLayout):
         self._name_lbl.color              = c('text')
         self._value_lbl.color             = c('text')
         self._name_inp.background_color   = c('card_bg')
-        self._name_inp.foreground_color   = c('text')
-        self._name_inp.cursor_color       = c('accent')
+        self._name_inp.font_name   = _font()
         self._value_inp.background_color  = c('card_bg')
-        self._value_inp.foreground_color  = c('text')
-        self._value_inp.cursor_color      = c('accent')
+        self._value_inp.font_name  = _font()
         self._save_bg_color.rgba          = list(c('accent'))
 
         # إعادة رسم القائمة بألوان الثيم الجديد
@@ -221,14 +217,11 @@ class BotVariablesTab(BoxLayout):
         # Search input — تم توسيع الحقل إلى 180dp لتعويض مكان الزر المحذوف
         self._search_inp = TextInput(
             hint_text='Search...',
-            hint_text_color=(0.5, 0.5, 0.5, 0.55),
-            foreground_color=_c('text'),
-            background_color=(0, 0, 0, 0),
-            cursor_color=_c('accent'),
             font_size=dp(13), font_name=_font(),
             multiline=False,
-            size_hint=(None, None), size=(dp(180), dp(34)),
+            size_hint=(None, 1), width=dp(180), height=dp(34),
             padding=[dp(10), dp(8)],
+            mode='fill',
         )
         with self._search_inp.canvas.before:
             self._search_bg_color = Color(*_c('card_bg'))
@@ -416,14 +409,11 @@ class BotVariablesTab(BoxLayout):
     def _editor_field(self, hint: str) -> TextInput:
         return TextInput(
             hint_text=hint,
-            hint_text_color=(0.5, 0.5, 0.5, 0.5),
-            foreground_color=_c('text'),
-            background_color=_c('card_bg'),
-            cursor_color=_c('accent'),
             font_size=dp(14), font_name=_font(),
             multiline=False,
             size_hint=(1, None), height=dp(46),
             padding=[dp(12), dp(10)],
+            mode='rectangle',
         )
 
     # ══════════════════════════════════════════════════════════════════════════

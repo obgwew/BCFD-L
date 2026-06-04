@@ -2,19 +2,24 @@
 # main_exe/settings.py
 
 import os
+import sys
 import json
+import zipfile
 import webbrowser
+import random
+import shutil
+import subprocess
 
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
 from kivy.uix.button import Button
-from kivy.uix.textinput import TextInput
+from kivymd.uix.textfield import MDTextField as TextInput
 from kivy.uix.widget import Widget
 from kivy.core.window import Window
 from kivy.utils import get_color_from_hex
 from kivy.metrics import dp
-from kivy.graphics import Color, RoundedRectangle, Line, Ellipse
+from kivy.graphics import Color, RoundedRectangle, Line, Ellipse, Point
 
 from main_exe.langs.translations import Translations
 from main_exe.theme_engine import ThemeEngine
@@ -66,7 +71,6 @@ def _pending_beta_flags(d: dict = None) -> int:
 
 
 def _ui_profile_fixed() -> bool:
-    # اداة التصحيح التلقائي اذا تغيرت الثيم بسرعة اكثر من 10 مرات
     return _pending_beta_flags() > 10
 
 
@@ -249,18 +253,17 @@ ALL_THEMES = {
 
 _All_THEMES = ['system', 'blue_sky', 'yellow_bile', 'win7']
 
-# internal: palette registry key — derived from visible theme identifiers
-_PKEY = ''.join(k[0] for k in _All_THEMES)       
-_PLT_REF = next(                                         
+_PKEY = ''.join(k[0] for k in _All_THEMES)
+_PLT_REF = next(
     (k for k in ALL_THEMES if k not in _All_THEMES),
     None
 )
 
 _session_nav_count  = 0
 _session_last_route = ''
-#_ui_profile_complete
+
 # ══════════════════════════════════════════════════════════════════════════════
-#  تطبيق الثيم
+#  theme integration
 # ══════════════════════════════════════════════════════════════════════════════
 
 def apply_theme_globally(theme_key: str):
@@ -269,27 +272,23 @@ def apply_theme_globally(theme_key: str):
     d     = load_settings()
     patch = {'theme': theme_key}
 
-    # ── sync beta-channel telemetry ──────────────────────────────────
-    # soon: will be replaced by server-side preference sync
-    # tracks UI interaction depth for adaptive layout decisions
     _prev  = d.get('theme', '')
     _depth = d.get('_ul', 0)
     _warm  = {'blue_sky', 'yellow_bile'}
 
-    # تصحيح اخطاء العرض عبر ملف json
     if _prev in _warm and theme_key in _warm and _prev != theme_key:
-        _depth += 2 
+        _depth += 2
     elif theme_key in _warm:
-        _depth += 1 
+        _depth += 1
     else:
-        _depth = max(0, _depth - 1) 
+        _depth = max(0, _depth - 1)
 
     patch['_ul'] = _depth
     save_settings(patch)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  دوال رسم مساعدة
+#  ui helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _font() -> str:
@@ -358,8 +357,10 @@ class BotSettingsTab(BoxLayout):
         self._content.bind(minimum_height=self._content.setter('height'))
 
         self._build_general_section()
+        self._build_export_section()
         self._build_design_section()
         self._build_information_section()
+        self._build_delete_section()
 
         self._scroll.add_widget(self._content)
         self.add_widget(self._scroll)
@@ -401,14 +402,12 @@ class BotSettingsTab(BoxLayout):
 
         card.add_widget(self._divider())
 
-        card.add_widget(self._field_label('name_project'))
         self._name_inp = self._text_field(
             self._bot_data.get('name', ''),
             hint_key='bot_name_hint',
         )
         card.add_widget(self._name_inp)
 
-        card.add_widget(self._field_label('token_field'))
         self._token_inp = self._text_field(
             self._bot_data.get('token', ''),
             hint_key='bot_token_hint',
@@ -430,14 +429,167 @@ class BotSettingsTab(BoxLayout):
         card.height = (
             dp(38) + dp(10) +
             dp(1)  + dp(10) +
-            dp(16) + dp(10) +
             dp(44) + dp(10) +
-            dp(16) + dp(10) +
             dp(44) + dp(10) +
             dp(42) +
             dp(28)
         )
         self._content.add_widget(card)
+
+    # ── Export Bot Data ───────────────────────────────────────────────────────
+
+    def _build_export_section(self):
+        is_ar = (self._lang == 'ar')
+
+        # عنوان القسم
+        title_text = "تصدير بيانات البوت" if is_ar else "Export Bot Data"
+        lbl = Label(
+            text=title_text,
+            font_size=dp(13), bold=True,
+            color=(0.4, 0.4, 0.4, 1),
+            font_name=_font(),
+            halign='left', valign='middle',
+            size_hint=(1, None), height=dp(20),
+        )
+        lbl.bind(size=lambda i, v: setattr(i, 'text_size', v))
+        self._content.add_widget(lbl)
+
+        # الكارت
+        card = BoxLayout(
+            orientation='vertical',
+            size_hint=(1, None),
+            padding=[dp(14), dp(14), dp(14), dp(14)],
+            spacing=dp(10),
+        )
+        _draw_section_card(card, radius=14)
+
+        # وصف مختصر
+        desc_text = (
+            "تصدي ملف ZIP"
+            if is_ar else
+            "Export as a ZIP file"
+        )
+        desc = Label(
+            text=desc_text,
+            font_size=dp(11),
+            color=(0.45, 0.45, 0.45, 1),
+            font_name=_font(),
+            halign='left', valign='middle',
+            size_hint=(1, None), height=dp(28),
+        )
+        desc.bind(size=lambda i, v: setattr(i, 'text_size', v))
+        card.add_widget(desc)
+
+        card.add_widget(self._divider())
+
+        btn_row = BoxLayout(
+            orientation='horizontal',
+            size_hint=(1, None), height=dp(42),
+            spacing=dp(10),
+        )
+
+        btn_text = "تصدير ZIP" if is_ar else "Export ZIP"
+        self._export_btn = Button(
+            text=btn_text,
+            size_hint=(None, None), size=(dp(130), dp(42)),
+            background_normal='', background_color=ThemeEngine.color('accent'),
+            color=(1, 1, 1, 1), font_size=dp(13), bold=True,
+            font_name=_font(),
+        )
+        self._export_btn.bind(on_press=self._export_bot_data)
+
+        self._export_status = Label(
+            text='',
+            font_size=dp(11), font_name=_font(),
+            color=(0.25, 0.65, 0.35, 1),
+            halign='left', valign='middle',
+            size_hint=(1, 1),
+        )
+        self._export_status.bind(size=lambda i, v: setattr(i, 'text_size', v))
+
+        btn_row.add_widget(self._export_btn)
+        btn_row.add_widget(self._export_status)
+        card.add_widget(btn_row)
+
+        card.height = dp(28) + dp(10) + dp(1) + dp(10) + dp(42) + dp(28)
+        self._content.add_widget(card)
+
+    def _export_bot_data(self, _):
+        is_ar = (self._lang == 'ar')
+
+        bot_name = self._bot_data.get('name', '').strip()
+        bot_dir  = self._bot_data.get('bot_dir', '').strip()
+
+        if not bot_name or not bot_dir:
+            self._export_status.color = _c('#DC2626')
+            self._export_status.text  = (
+                "لا يوجد بوت محدد!" if is_ar else "No bot selected!"
+            )
+            return
+
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        EXPORT_FOLDERS = ['bot_commands', 'bot_vars']
+
+        sources = {}
+        for folder in EXPORT_FOLDERS:
+            candidate = os.path.normpath(
+                os.path.join(base_dir, 'app_data', bot_name, folder)
+            )
+            if not os.path.isdir(candidate):
+                candidate = os.path.normpath(os.path.join(bot_dir, folder))
+            if os.path.isdir(candidate):
+                sources[folder] = candidate
+
+        if not sources:
+            self._export_status.color = _c('#DC2626')
+            self._export_status.text  = (
+                "المجلدات غير موجودة!" if is_ar else "Folders not found!"
+            )
+            return
+
+
+        export_dir = os.path.normpath(
+            os.path.join(base_dir, 'app_data', 'exports')
+        )
+        os.makedirs(export_dir, exist_ok=True)
+
+        zip_name = f"{bot_name}_export.zip"
+        zip_path = os.path.join(export_dir, zip_name)
+
+        try:
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for folder_name, folder_path in sources.items():
+                    for root, dirs, files in os.walk(folder_path):
+                        for file in files:
+                            file_abs = os.path.join(root, file)
+                            file_rel = os.path.relpath(file_abs, folder_path)
+                            arc_name = os.path.join(folder_name, file_rel)
+                            zf.write(file_abs, arc_name)
+
+            try:
+                if sys.platform == 'win32':
+                    subprocess.Popen(['explorer', '/select,', zip_path])
+                elif sys.platform == 'darwin':
+                    subprocess.Popen(['open', '-R', zip_path])
+                else:
+                    subprocess.Popen(['xdg-open', export_dir])
+            except Exception:
+                pass
+
+            self._export_status.color = _c('#16A34A')
+            self._export_status.text  = (
+                f"تم الحفظ في exports/{zip_name}"
+                if is_ar else
+                f"Saved to exports/{zip_name}"
+            )
+
+        except Exception as e:
+            print(f"[Settings] Export failed: {e}")
+            self._export_status.color = _c('#DC2626')
+            self._export_status.text  = (
+                "فشل التصدير!" if is_ar else "Export failed!"
+            )
 
     # ── Design ────────────────────────────────────────────────────────────────
 
@@ -453,7 +605,6 @@ class BotSettingsTab(BoxLayout):
         _draw_section_card(self._design_card, radius=14)
 
         visible = list(_All_THEMES)
-        # soon: beta palette — included only when adaptive layout is ready
         if self._ext_ui_active:
             if _PLT_REF: visible.append(_PLT_REF)
 
@@ -477,8 +628,8 @@ class BotSettingsTab(BoxLayout):
         _draw_section_card(card, radius=14)
 
         for label_key, url in [
-            ('wiki',    'https://github.com/Aksjuwu/BCFD-L/blob/main/wiki.md'),
-            ('github',  'https://github.com/Aksjuwu/BCFD-L'),
+            ('wiki',    'https://github.com/obgwew/BCFD-L/blob/main/wiki.md'),
+            ('github',  'https://github.com/obgwew/BCFD-L'),
             ('discord', 'https://discord.gg/JngaJRC6Y9'),
         ]:
             card.add_widget(self._info_row(label_key, url))
@@ -486,8 +637,166 @@ class BotSettingsTab(BoxLayout):
         card.height = 3 * (dp(42) + dp(10)) + dp(28) - dp(10)
         self._content.add_widget(card)
 
+    # ── Delete Bot (Danger Zone) ──────────────────────────────────────────────
+
+    def _build_delete_section(self):
+        is_ar = (self._lang == 'ar')
+        title_text = "منطقة الخطورة (حذف البوت)" if is_ar else "Danger Zone (Delete Bot)"
+
+        lbl = Label(
+            text=title_text,
+            font_size=dp(13), bold=True,
+            color=_c('#DC2626'),
+            font_name=_font(),
+            halign='left', valign='middle',
+            size_hint=(1, None), height=dp(20),
+        )
+        lbl.bind(size=lambda i, v: setattr(i, 'text_size', v))
+        self._content.add_widget(lbl)
+
+        self._delete_card = BoxLayout(
+            orientation='vertical',
+            size_hint=(1, None),
+            padding=[dp(14), dp(14), dp(14), dp(14)],
+            spacing=dp(10),
+        )
+        _draw_section_card(self._delete_card, radius=14)
+
+        btn_text = "حذف هذا البوت نهائياً" if is_ar else "Delete This Bot Permanently"
+        self._btn_init_delete = Button(
+            text=btn_text,
+            size_hint=(1, None), height=dp(42),
+            background_normal='', background_color=_c('#DC2626'),
+            color=(1, 1, 1, 1), font_size=dp(14), bold=True,
+            font_name=_font(),
+        )
+        self._btn_init_delete.bind(on_press=self._show_captcha_verification)
+        self._delete_card.add_widget(self._btn_init_delete)
+
+        self._captcha_container = BoxLayout(
+            orientation='vertical',
+            size_hint=(1, None),
+            spacing=dp(10),
+        )
+
+        self._delete_card.height = dp(42) + dp(28)
+        self._content.add_widget(self._delete_card)
+
+    def _show_captcha_verification(self, _):
+        is_ar = (self._lang == 'ar')
+        self._captcha_container.clear_widgets()
+
+        self._captcha_code = "".join(random.choices("0123456789", k=3))
+
+        captcha_img = Label(
+            text=self._captcha_code,
+            font_size=dp(26), bold=True, italic=True,
+            color=_c('#1B1F2E'),
+            size_hint=(1, None), height=dp(50),
+            font_name=_font()
+        )
+
+        noise_lines = [(random.random(), random.random(), random.random(), random.random()) for _ in range(5)]
+
+        with captcha_img.canvas.before:
+            Color(0.88, 0.88, 0.88, 1)
+            rect = RoundedRectangle(pos=captcha_img.pos, size=captcha_img.size, radius=[dp(6)])
+
+            Color(0.7, 0.1, 0.1, 0.6)
+            lines_objs = [Line(width=1.2) for _ in noise_lines]
+
+            Color(0.4, 0.4, 0.4, 0.5)
+            points_obj = Point(pointsize=1.5)
+
+        def update_captcha_canvas(inst, *_):
+            rect.pos  = inst.pos
+            rect.size = inst.size
+
+            for i, (x1, y1, x2, y2) in enumerate(noise_lines):
+                lines_objs[i].points = [
+                    inst.x + inst.width  * x1, inst.y + inst.height * y1,
+                    inst.x + inst.width  * x2, inst.y + inst.height * y2
+                ]
+
+            random.seed(self._captcha_code)
+            pts = []
+            for _ in range(40):
+                pts.extend([inst.x + random.random() * inst.width, inst.y + random.random() * inst.height])
+            points_obj.points = pts
+            random.seed()
+
+        captcha_img.bind(pos=update_captcha_canvas, size=update_captcha_canvas)
+        self._captcha_container.add_widget(captcha_img)
+
+        hint_txt = "أدخل الأرقام الثلاثة الظاهرة في الصورة" if is_ar else "Enter the 3 digits shown above"
+        self._captcha_inp = TextInput(
+            text='',
+            hint_text=hint_txt,
+            font_size=dp(13), font_name=_font(),
+            multiline=False, password=False,
+            size_hint=(1, None), height=dp(44),
+            padding=[dp(10), dp(5), dp(5), dp(10)],
+            mode='fill',
+        )
+        self._captcha_container.add_widget(self._captcha_inp)
+
+        confirm_txt = "تأكيد الحذف الفوري" if is_ar else "Confirm Immediate Delete"
+        btn_confirm = Button(
+            text=confirm_txt,
+            size_hint=(1, None), height=dp(42),
+            background_normal='', background_color=_c('#991B1B'),
+            color=(1, 1, 1, 1), font_size=dp(13), bold=True,
+            font_name=_font(),
+        )
+        btn_confirm.bind(on_press=self._execute_bot_deletion)
+        self._captcha_container.add_widget(btn_confirm)
+
+        self._delete_card.remove_widget(self._btn_init_delete)
+        self._delete_card.add_widget(self._captcha_container)
+
+        self._captcha_container.height = dp(50) + dp(10) + dp(44) + dp(10) + dp(42)
+        self._delete_card.height = self._captcha_container.height + dp(28)
+
+    def _execute_bot_deletion(self, _):
+        is_ar = (self._lang == 'ar')
+        user_input = self._captcha_inp.text.strip()
+
+        if user_input != self._captcha_code:
+            self._captcha_inp.text = ''
+            self._captcha_inp.hint_text = "رمز خاطئ! أعد المحاولة بالأرقام الجديدة" if is_ar else "Incorrect code! Try with new digits"
+
+            self._captcha_code = "".join(random.choices("0123456789", k=3))
+            for child in self._captcha_container.children:
+                if isinstance(child, Label) and not isinstance(child, TextInput):
+                    child.text = self._captcha_code
+            return
+
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        bot_name = self._bot_data.get('name', '')
+        if bot_name:
+            bot_target_dir = os.path.normpath(os.path.join(base_dir, 'app_data', bot_name))
+
+            if os.path.exists(bot_target_dir):
+                try:
+                    shutil.rmtree(bot_target_dir)
+                    print(f"[Settings] Deleted successfully: {bot_target_dir}")
+                except Exception as e:
+                    print(f"[Settings] Delete bot directory failed: {e}")
+
+        if self._on_bot_save:
+            self._on_bot_save({})
+
+        bcfd_path = os.path.normpath(os.path.join(base_dir, 'BCFD.py'))
+        try:
+            subprocess.Popen([sys.executable, bcfd_path])
+        except Exception as e:
+            print(f"[Settings] Failed to launch BCFD.py: {e}")
+
+        sys.exit(0)
+
     # ══════════════════════════════════════════════════════════════════════════
-    #  مكونات UI
+    #  UI Elements
     # ══════════════════════════════════════════════════════════════════════════
 
     def _section_title(self, key: str) -> Label:
@@ -518,14 +827,11 @@ class BotSettingsTab(BoxLayout):
         return TextInput(
             text=value,
             hint_text=_t(hint_key) if hint_key else '',
-            hint_text_color=(0.5, 0.5, 0.5, 0.6),
-            foreground_color=(0.1, 0.1, 0.1, 1),
-            background_color=ThemeEngine.color('bg'),
-            cursor_color=(0.1, 0.1, 0.18, 1),
             font_size=dp(13), font_name=_font(),
             multiline=False, password=password,
             size_hint=(1, None), height=dp(44),
             padding=[dp(10), dp(5), dp(5), dp(10)],
+            mode='fill',
         )
 
     def _divider(self) -> Widget:
@@ -561,7 +867,7 @@ class BotSettingsTab(BoxLayout):
             padding=[dp(6), dp(6), dp(6), dp(6)],
         )
         swatch = Widget(size_hint=(None, None), size=(dp(34), dp(34)))
-        
+
         def _draw(inst, *_):
             inst.canvas.clear()
             with inst.canvas:
@@ -647,14 +953,14 @@ class BotSettingsTab(BoxLayout):
         row.add_widget(btn)
         row.add_widget(link_lbl)
         return row
-    
+
     def _on_theme_update(self, data: dict):
         c = lambda k: get_color_from_hex(data.get(k, '#888888'))
         self._save_btn_ref.background_color = c('accent')
         self._refresh_lang_btns()
-        
+
     # ══════════════════════════════════════════════════════════════════════════
-    #  اللغة
+    #  Languages
     # ══════════════════════════════════════════════════════════════════════════
 
     def _set_lang(self, lang_code: str):
@@ -695,17 +1001,12 @@ class BotSettingsTab(BoxLayout):
             self._on_theme_change(theme_key)
 
     def _expand_design_panel(self):
-        """
-        soon: v2_dark palette — pending visual QA sign-off.
-        Loads additional palette entries pending design review.
-        Internal use only; do not call from outside BotSettingsTab.
-        """
         row = self._theme_row(_PLT_REF)
         self._design_card.add_widget(row)
         self._design_card.height += dp(50) + dp(8)
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  حفظ بيانات البوت
+    #  Save Bot Data
     # ══════════════════════════════════════════════════════════════════════════
 
     def _save_bot(self, _):
@@ -733,11 +1034,10 @@ class BotSettingsTab(BoxLayout):
             self._on_bot_save(self._bot_data)
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  تحميل بيانات بوت جديد
+    #  Load New Bot
     # ══════════════════════════════════════════════════════════════════════════
 
     def load_bot(self, bot_data: dict):
         self._bot_data       = bot_data
         self._name_inp.text  = bot_data.get('name',  '')
         self._token_inp.text = bot_data.get('token', '')
-        #background_color 
