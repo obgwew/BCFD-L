@@ -1,0 +1,11 @@
+welcome to update 2.2.0
+
+- Convert from kivy to flet
+
+- ui updated 
+
+- ui effects
+
+- fixed some ui
+
+- fixed some commands

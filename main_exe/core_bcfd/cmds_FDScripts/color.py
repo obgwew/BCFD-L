@@ -1,0 +1,17 @@
+# cmds_FDScripts/color.py
+import discord
+from FDScript import (
+    ExecutionContext, Command,
+    FDLogicError, _send_error, _parse_color, _NAMED_COLORS,
+)
+
+
+async def execute(cmd: Command, args: list[str], ctx: ExecutionContext, ch: discord.abc.Messageable) -> None:
+    if len(args) == 1:
+        ctx.embed_builder.color = _parse_color(args[0])
+        ctx.log_event(f"color → {args[0]!r}")
+    else:
+        await _send_error(ch, FDLogicError(
+            "`$color` requires one argument: $color[hex or name]\n"
+            f"Named colors: {', '.join(sorted(_NAMED_COLORS))}"
+        ))
