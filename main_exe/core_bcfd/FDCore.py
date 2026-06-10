@@ -17,7 +17,7 @@ import time
 
 _VARS_DIR: str = ''
 _BOT_START_TIME: float = 0.0
-_inline_resolver = None  # registered by FDScript to avoid circular imports
+_inline_resolver = None 
 _cooldowns: dict = {}
 
 

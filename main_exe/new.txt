@@ -1,11 +1,11 @@
-welcome to update 2.2.0
+welcome to update 2.2.1
 
-- Convert from kivy to flet
+- Fixed vars commands
 
-- ui updated 
+- Fixed prefix logical
 
-- ui effects
+- Fixing theme switching 
 
-- fixed some ui
+- Fix switching languages
 
-- fixed some commands
+- add 2 languages Fr(French) & De(German)

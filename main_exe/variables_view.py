@@ -11,6 +11,14 @@ import flet as ft
 from main_exe.langs.translations import Translations
 from main_exe.settings           import get_current_lang
 from main_exe.theme_engine       import ThemeEngine
+from main_exe.core_bcfd.FDCore   import set_vars_dir as _fd_set_vars_dir
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Data sync
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _sync_fdcore(bot_dir: str):
+    _fd_set_vars_dir(_vars_dir(bot_dir))
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Translation & Language helper
@@ -185,6 +193,7 @@ class BotVariablesTab:
     def load_bot(self, bot_dir: str):
         self._bot_dir   = bot_dir
         self._variables = _load_all_vars(bot_dir)
+        _sync_fdcore(bot_dir)
         if self._current_view == 'list':
             self._refresh_list()
 
@@ -559,6 +568,7 @@ class BotVariablesTab:
 
     def _do_delete(self, path: str):
         _delete_var(path)
+        _sync_fdcore(self._bot_dir) 
         self._show_list()
 
     def _do_delete_from_editor(self):
@@ -584,4 +594,5 @@ class BotVariablesTab:
             return
 
         _write_var(self._bot_dir, name, value, self._edit_path)
+        _sync_fdcore(self._bot_dir)
         self._show_list()

@@ -21,6 +21,12 @@ def resolve_inline(args: list[str], ctx: ExecutionContext) -> str:
         ))
     value = str(data[name])
     ctx.log_event(f"getVar [{name}] → {_truncate(value)!r}")
+    
+    from main_exe.core_bcfd.FDCore import _VARS_DIR
+    print(f"[getVar DEBUG] looking for: '{name}' in: '{_VARS_DIR}'")
+    data = _load_data()
+    print(f"[getVar DEBUG] found keys: {list(data.keys())}")
+    
     return value
 
 async def execute(cmd: Command, args: list[str], ctx: ExecutionContext, ch: discord.abc.Messageable) -> None:

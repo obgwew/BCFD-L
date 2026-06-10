@@ -12,6 +12,7 @@ import webbrowser
 import random
 import shutil
 import subprocess
+import threading
 
 import flet as ft
 import arabic_reshaper
@@ -53,7 +54,6 @@ def save_settings(patch: dict):
 def get_current_theme() -> str:
     return load_settings().get('theme', 'system_wh')
 
-
 def get_current_lang() -> str:
     return load_settings().get('lang', 'en')
 
@@ -87,11 +87,11 @@ _FALLBACKS = {
     'bot_name_hint':     'Bot Name',
     'bot_token_hint':    'Bot Token',
     'token_required':    'Token is required',
-    'theme_system':      'System (Default)',
-    'theme_blue_sky':    'Blue Sky',
-    'theme_yellow_bile': 'Yellow',
-    'theme_win7':        'Win7',
-    'theme_v2_dark':     'Dark Gold',
+    'system_wh':         'System (Light)',
+    'system_da':         'System (Dark)',
+    'blue_sky':          'Blue Sky',
+    'yellow_bile':       'Yellow',
+    'v2_dark':           'Dark Gold',
     'export_section':    'Export Bot Data',
     'export_desc':       'Export commands and variables as a ZIP file',
     'export_zip':        'Export ZIP',
@@ -106,6 +106,19 @@ _FALLBACKS = {
     'captcha_wrong':     'Incorrect code — try again',
 }
 
+_LANG_LABELS: dict[str, str] = {
+    'en': 'English',
+    'ar': 'العربية',
+    'fr': 'Français',
+    'de': 'Deutsch',
+    
+    # soon...
+    'es': 'Español',
+    'ja': '日本語',
+    'tr': 'Türkçe',
+    'ru': 'Русский',
+}
+
 def reshape_arabic(text: str) -> str:
     if not isinstance(text, str):
         return text
@@ -115,7 +128,9 @@ def reshape_arabic(text: str) -> str:
 
 def _t(key: str) -> str:
     val = Translations.get(key, get_current_lang())
-    return val if val else _FALLBACKS.get(key, key)
+    if val and val != key:
+        return val
+    return _FALLBACKS.get(key, key)
 
 def _ar(text: str) -> str:
     if get_current_lang() in ['ar', 'arabic', 'AR']:
@@ -323,6 +338,20 @@ def apply_theme_globally(theme_key: str):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  App restart helper
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _restart_app():
+    base_dir  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    bcfd_path = os.path.normpath(os.path.join(base_dir, 'BCFD.py'))
+    try:
+        subprocess.Popen([sys.executable, bcfd_path])
+    except Exception as e:
+        print(f'[Settings] Relaunch failed: {e}')
+    sys.exit(0)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  Card helper
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -357,6 +386,10 @@ class BotSettingsTab:
         self._current_theme = get_current_theme()
         self._theme_btns: dict[str, ft.FilledButton] = {}
         self._ext_ui_active = _ui_profile_fixed()
+
+        # ── Debounce state for theme selection ────────────────────────────────
+        self._theme_timer: threading.Timer | None = None
+        self._theme_lock  = threading.Lock()
 
         self._export_status_text = ft.Text('', size=11, color=_c('success'))
 
@@ -411,8 +444,7 @@ class BotSettingsTab:
         )
 
         self._design_col = ft.Column(spacing=4)
-        self._btn_en: ft.FilledButton = None
-        self._btn_ar: ft.FilledButton = None
+        self._lang_dropdown: ft.Dropdown = None
 
     # ── Build ─────────────────────────────────────────────────────────────────
 
@@ -439,9 +471,7 @@ class BotSettingsTab:
     # ── Section: General ──────────────────────────────────────────────────────
 
     def _build_general_section(self) -> ft.Control:
-        self._btn_en = self._lang_btn('EN', 'en')
-        self._btn_ar = self._lang_btn('AR', 'ar')
-        self._refresh_lang_btns()
+        self._lang_dropdown = self._build_lang_dropdown()
 
         return ft.Column(
             [
@@ -454,8 +484,7 @@ class BotSettingsTab:
                                     ft.Text(_t('language'), size=13,
                                             color=_c('text'), expand=True,
                                             weight=ft.FontWeight.W_500),
-                                    self._btn_en,
-                                    self._btn_ar,
+                                    self._lang_dropdown,
                                 ],
                                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
@@ -484,6 +513,42 @@ class BotSettingsTab:
             ],
             spacing=8,
         )
+
+    # ── Language dropdown builder ─────────────────────────────────────────────
+
+    def _build_lang_dropdown(self) -> ft.Dropdown:
+        available = list(Translations.translations.keys())
+
+        options = [
+            ft.DropdownOption(
+                key=code,
+                text=_LANG_LABELS.get(code, code.upper()),
+            )
+            for code in available
+        ]
+
+        return ft.Dropdown(
+            value=self._lang,
+            options=options,
+            dense=True,
+            width=140,
+            border_color=_c('card_border'),
+            focused_border_color=_c('accent'),
+            bgcolor=_c('card_bg'),
+            color=_c('text'),
+            text_style=ft.TextStyle(color=_c('text'), size=13),
+            label_style=ft.TextStyle(color=_c('text_dim'), size=12),
+            on_select=self._on_lang_change,
+        )
+
+    # ── Language change handler ───────────────────────────────────────────────
+
+    def _on_lang_change(self, e: ft.ControlEvent):
+        selected = e.control.value
+        if not selected or selected == self._lang:
+            return
+        save_settings({'lang': selected})
+        _restart_app()
 
     # ── Section: Export ───────────────────────────────────────────────────────
 
@@ -612,18 +677,6 @@ class BotSettingsTab:
             color=_c('text_dim'),
         )
 
-    def _lang_btn(self, label: str, code: str) -> ft.FilledButton:
-        return ft.FilledButton(
-            content=ft.Text(label, weight=ft.FontWeight.BOLD),
-            on_click=lambda _, c=code: self._set_lang(c),
-            style=ft.ButtonStyle(
-                bgcolor=_c('card_bg'),
-                color=_c('text'),
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding(left=14, top=6, right=14, bottom=6),
-            ),
-        )
-
     def _theme_row(self, theme_key: str) -> ft.Control:
         info   = ALL_THEMES[theme_key]
         is_sel = theme_key == self._current_theme
@@ -676,7 +729,7 @@ class BotSettingsTab:
                 [
                     swatch,
                     ft.Text(
-                        _t('theme_' + theme_key),
+                        _t(theme_key),
                         size=13,
                         color=_c('text'),
                         weight=ft.FontWeight.W_500,
@@ -724,55 +777,51 @@ class BotSettingsTab:
             padding=ft.Padding(left=4, right=0, top=0, bottom=0),
         )
 
-    # ── Language ──────────────────────────────────────────────────────────────
-
-    def _set_lang(self, code: str):
-        self._lang = code
-        save_settings({'lang': code})
-        self._refresh_lang_btns()
-        self._page.update()
-
-    def _refresh_lang_btns(self):
-        if not self._btn_en or not self._btn_ar:
-            return
-        for btn, code in [(self._btn_en, 'en'), (self._btn_ar, 'ar')]:
-            active = code == self._lang
-            btn.style = ft.ButtonStyle(
-                bgcolor=_c('accent') if active else _c('card_bg'),
-                color='#FFFFFF' if active else _c('text'),
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding(left=14, top=6, right=14, bottom=6),
-            )
-
     # ── Theme selection ───────────────────────────────────────────────────────
 
     def _select_theme(self, theme_key: str):
+        """Debounce rapid theme clicks — only the last selection within 150 ms fires."""
+        with self._theme_lock:
+            if self._theme_timer is not None:
+                self._theme_timer.cancel()
+            self._theme_timer = threading.Timer(
+                0.15, self._commit_theme, args=[theme_key]
+            )
+            self._theme_timer.start()
+
+    def _commit_theme(self, theme_key: str):
+        """Apply the chosen theme and trigger a full UI rebuild via the parent."""
+        with self._theme_lock:
+            self._theme_timer = None
+
         apply_theme_globally(theme_key)
         self._current_theme = theme_key
 
+        # Update page background to match the new theme immediately.
+        self._page.bgcolor = _c('bg')
+
         if _ui_profile_fixed() and not self._ext_ui_active:
             self._ext_ui_active = True
-            if _PLT_REF:
-                self._design_col.controls.append(self._theme_row(_PLT_REF))
 
-        for key, btn in self._theme_btns.items():
-            active = key == theme_key
-            btn.content = ft.Text(
-                '✓' if active else '>',
-                color='#FFFFFF' if active else _c('text_dim'),
-                weight=ft.FontWeight.BOLD,
-            )
-            btn.style = ft.ButtonStyle(
-                bgcolor=_c('accent') if active else _c('card_border'),
-                color='#FFFFFF',
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding(left=12, top=4, right=12, bottom=4),
-            )
-
+        # Delegate full rebuild to parent — avoids partial/stale control updates.
         if self._on_theme_change:
             self._on_theme_change(theme_key)
-
-        self._page.update()
+        else:
+            # Fallback: rebuild only the theme buttons if no parent callback given.
+            for key, btn in self._theme_btns.items():
+                active = key == theme_key
+                btn.content = ft.Text(
+                    '✓' if active else '>',
+                    color='#FFFFFF' if active else _c('text_dim'),
+                    weight=ft.FontWeight.BOLD,
+                )
+                btn.style = ft.ButtonStyle(
+                    bgcolor=_c('accent') if active else _c('card_border'),
+                    color='#FFFFFF',
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                    padding=ft.Padding(left=12, top=4, right=12, bottom=4),
+                )
+            self._page.update()
 
     # ── Export ────────────────────────────────────────────────────────────────
 
@@ -875,13 +924,7 @@ class BotSettingsTab:
         if self._on_bot_save:
             self._on_bot_save({})
 
-        bcfd_path = os.path.normpath(os.path.join(base_dir, 'BCFD.py'))
-        try:
-            subprocess.Popen([sys.executable, bcfd_path])
-        except Exception as e:
-            print(f'[Settings] Relaunch failed: {e}')
-
-        sys.exit(0)
+        _restart_app()
 
     # ── Save Bot ──────────────────────────────────────────────────────────────
 
@@ -915,7 +958,7 @@ class BotSettingsTab:
 
         self._page.update()
 
-    # ── Load Bot ──────────────────────────────────────────────────────────────
+    # ── Load Bot ──────────────────────────────────────────════════════════════
 
     def load_bot(self, bot_data: dict):
         self._bot_data          = bot_data

@@ -59,6 +59,13 @@
   - Fixed some ui
   - Fixed some commands
 
+- **2.2.1** - Fixed & Add Languages
+  - Fixed vars commands
+  - Fixed prefix logical 
+  - Fixing theme switching
+  - Fix switching languages
+  - add 2 languages Fr(French) & De(German)
+
 ---
 
 **Developers:** @y.lw (contributor) · [@obgwew](https://github.com/obgwew) (programming)

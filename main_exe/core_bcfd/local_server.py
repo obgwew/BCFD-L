@@ -53,7 +53,6 @@ class PrefixManager:
         return None
 
     def get_script_by_message(self, message_content: str) -> str | None:
-        """فحص الأوامر العادية ذات البادئة الثابتة من مجلد bot_commands"""
         if not os.path.isdir(self._bot_commands_dir):
             return None
 
@@ -71,7 +70,8 @@ class PrefixManager:
                 first_line = content.split('\n')[0].strip()
                 if first_line.upper().startswith("#PREFIX:"):
                     prefix = first_line.split(":", 1)[1].strip()
-                    if message_content.strip().startswith(prefix):
+                    after = message_content.strip()[len(prefix):]
+                    if message_content.strip().startswith(prefix) and (not after or after[0].isspace()):
                         return content
             except Exception:
                 pass
@@ -79,7 +79,7 @@ class PrefixManager:
 
 
 # ─────────────────────────────────────────────────────────────
-#  إعدادات المتغيرات العامة للبوت
+#  setting up the bot 
 # ─────────────────────────────────────────────────────────────
 
 _client = None
@@ -91,16 +91,9 @@ prefix_manager = PrefixManager()
 
 def _get_token(bot_dir: str) -> str:
     possible_paths = [
-        # 1. المسار المباشر (كما كان)
         os.path.join(bot_dir, 'config.json'),
-        
-        # 2. داخل مجلد bot_files (الحالة الصحيحة عندك)
         os.path.join(bot_dir, 'bot_files', 'config.json'),
-        
-        # 3. في المجلد الأب (احتياطي)
         os.path.join(os.path.dirname(bot_dir), 'config.json'),
-        
-        # 4. في المجلد الأب + bot_files
         os.path.join(os.path.dirname(bot_dir), 'bot_files', 'config.json'),
     ]
 
@@ -127,7 +120,7 @@ def _get_token(bot_dir: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════════
-#  بناء البوت وربط الأحداث المستقلة (event_FDScripts)
+# event_FDScripts
 # ══════════════════════════════════════════════════════════════
 
 def _make_bot():
@@ -164,14 +157,11 @@ def _make_bot():
             except Exception as e:
                 print(f"[Bot] خطأ في تنفيذ حدث $onLeave: {e}")
 
-    # ── 3. حدث معالجة الرسائل والردود الشات ──
     @bot.event
     async def on_message(message):
-        # تجاهل رسائل البوتات تماماً لتجنب الحلقات اللانهائية
         if message.author.bot:
             return
 
-        # أ. تشغيل حدث الرد الدائم ($alwaysReply) أولاً مع كل رسالة جديدة
         always_script = prefix_manager.get_event_script("$alwaysReply")
         if always_script:
             try:
@@ -180,7 +170,6 @@ def _make_bot():
             except Exception as e:
                 print(f"[Bot] خطأ في تنفيذ حدث $alwaysReply: {e}")
 
-        # ب. فحص الأوامر العادية المكتوبة ببادئة مخصصة وتشغيلها
         script_text = prefix_manager.get_script_by_message(message.content)
         if script_text is not None:
             try:
@@ -195,7 +184,7 @@ def _make_bot():
 
 
 # ══════════════════════════════════════════════════════════════
-#  دوال تشغيل وإيقاف البوت عبر خيوط المعالجة (Threading)
+#  Threading
 # ══════════════════════════════════════════════════════════════
 
 def _runner(token: str):
@@ -228,7 +217,6 @@ def start_bot(bot_dir: str) -> bool:
         print("[Bot] لا يوجد توكن في config.json")
         return False
 
-    # ربط المسارات بـ PrefixManager
     prefix_manager.set_bot_dir(bot_dir)
 
     bot_root = os.path.dirname(os.path.abspath(bot_dir))
